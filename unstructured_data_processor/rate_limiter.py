@@ -31,3 +31,8 @@ class RateLimiter:
         await self.wait()
         result = await func(*args, **kwargs)
         return result
+
+    def update_settings(self, new_rate: int, new_period: int):
+        self.rate_limit = new_rate
+        self.time_period = new_period
+        self.call_times = []  # Reset call times when settings are updated
