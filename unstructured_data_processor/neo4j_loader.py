@@ -3,6 +3,7 @@ from neo4j import GraphDatabase
 import json
 import logging
 import re
+from typing import Dict, Any
 
 class Neo4jLoader:
     def __init__(self, uri, username, password):
