@@ -118,4 +118,12 @@ class UnstructuredDataProcessor:
         return data
 
     async def restructure_documents(self, input_directory: str) -> Dict[str, Any]:
-        return await self.process_documents(input_directory)
+        data = await self.process_documents(input_directory)
+        # Ensure we're returning a dictionary, not a formatted string
+        if isinstance(data, str):
+            try:
+                return json.loads(data)
+            except json.JSONDecodeError:
+                # If it's not valid JSON, return the original structure
+                return {"entities": [], "relationships": []}
+        return data
