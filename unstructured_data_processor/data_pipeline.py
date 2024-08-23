@@ -18,7 +18,7 @@ class UnstructuredDataProcessor:
         Settings.chunk_overlap = chunk_overlap
         self.rate_limiter = RateLimiter(rate_limit, time_period, max_tokens)
 
-      @staticmethod
+    @staticmethod
     def clean_text(text: str) -> str:
         text = re.sub(r'[\xa0\n]', ' ', text)
         text = re.sub(r'([ ]{2,})', ' ', text)
