@@ -3,7 +3,7 @@ from neo4j import GraphDatabase
 import json
 import logging
 import re
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 class Neo4jLoader:
     def __init__(self, uri, username, password):
@@ -33,7 +33,7 @@ class Neo4jLoader:
     def sanitize_label(label):
         return ''.join(word.capitalize() for word in re.findall(r'\w+', label))
 
-    def load_entities(self, entities: list):
+    def load_entities(self, entities: List[Dict[str, Any]]):
         with self.driver.session() as session:
             for entity in entities:
                 session.execute_write(self._create_entity, entity)
@@ -50,7 +50,7 @@ class Neo4jLoader:
                metadata=json.dumps(entity['metadata']),
                original_type=entity['type'])
 
-    def load_relationships(self, relationships: list):
+    def load_relationships(self, relationships: List[Dict[str, Any]]):
         with self.driver.session() as session:
             for relationship in relationships:
                 session.execute_write(self._create_relationship, relationship)
