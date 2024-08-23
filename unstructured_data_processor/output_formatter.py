@@ -6,13 +6,15 @@ import io
 
 class OutputFormatter:
     def __init__(self):
-        self.output_format = 'json'
+        self.output_format = 'python_dict'  # Default to Python dictionary
 
     def set_output_format(self, format: str):
         self.output_format = format
 
     def format_output(self, data: Dict[str, Any]) -> Any:
-        if self.output_format == 'json':
+        if self.output_format == 'python_dict':
+            return data  # Return the data as-is
+        elif self.output_format == 'json':
             return json.dumps(data, indent=2)
         elif self.output_format == 'csv':
             return self._to_csv(data)
