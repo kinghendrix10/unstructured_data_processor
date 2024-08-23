@@ -13,7 +13,6 @@ pip install git+https://github.com/yourusername/unstructured_data_processor.git
 Here's a basic example of how to use the Unstructured Data Processor:
 
 ```python
-import asyncio
 from unstructured_data_processor import UnstructuredDataProcessor, Neo4jLoader
 from llama_index.llms.groq import Groq
 
