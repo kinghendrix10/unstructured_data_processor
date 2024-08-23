@@ -156,7 +156,6 @@ class UnstructuredDataProcessor:
             if success:
                 all_data["entities"].extend(structured_data.get("entities", []))
                 all_data["relationships"].extend(structured_data.get("relationships", []))
-                print(f"Successfully processed: {filename}")
             else:
                 print(f"Failed to process: {filename}")
 
