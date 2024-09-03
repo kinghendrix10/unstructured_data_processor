@@ -149,59 +149,34 @@ class UnstructuredDataProcessor:
           "document_metadata": all_document_metadata
       }
 
-    async def process_document(self, document: Document) -> Dict[str, Any]:
+    async def restructure_documents(self, input_directory: str) -> Dict[str, Any]:
+        if not os.path.exists(input_directory):
+            logging.error(f"Input directory does not exist: {input_directory}")
+            return {"entities": [], "relationships": [], "document_metadata": []}
+
         try:
-            processed_text = self.preprocessor.preprocess_text(document.text)
+            # Load documents from the directory
+            documents = SimpleDirectoryReader(input_dir=input_directory).load_data()
             
-            entities = await self.entity_extractor.extract_entities(processed_text)
-            if not isinstance(entities, list):
-                logging.warning(f"Unexpected entity extraction result: {entities}")
-                entities = []
+            if not documents:
+                logging.warning(f"No documents found in directory: {input_directory}")
+                return {"entities": [], "relationships": [], "document_metadata": []}
 
-            relationships = await self.relationship_extractor.extract_relationships(processed_text, entities)
-            if not isinstance(relationships, list):
-                logging.warning(f"Unexpected relationship extraction result: {relationships}")
-                relationships = []
-            
-            # Add document metadata to each entity and relationship
-            for entity in entities:
-                if isinstance(entity, dict):
-                    entity['document_metadata'] = document.metadata
-                else:
-                    logging.warning(f"Unexpected entity format: {entity}")
+            # Process each document
+            results = []
+            for document in documents:
+                result = await self.process_document(document)
+                results.append(result)
 
-            for relationship in relationships:
-                if isinstance(relationship, dict):
-                    relationship['document_metadata'] = document.metadata
-                else:
-                    logging.warning(f"Unexpected relationship format: {relationship}")
-            
-            return {
-                "entities": entities,
-                "relationships": relationships,
-                "document_metadata": document.metadata
-            }
+            # Merge results from all documents
+            merged_data = self.merge_results(results)
+            final_data = self._finalize_data(merged_data)
+
+            return self.output_formatter.format_output(final_data)
+
         except Exception as e:
-            logging.error(f"Error processing document: {e}")
-            return {
-                "entities": [],
-                "relationships": [],
-                "document_metadata": document.metadata
-            }
-
-    async def _process_batch(self, documents: List[Document]) -> List[Dict[str, Any]]:
-        batch_results = []
-        for document in documents:
-            for _ in range(self.max_retries):
-                try:
-                    result = await self.process_document(document)
-                    batch_results.append(result)
-                    break
-                except Exception as e:
-                    logging.error(f"Error processing document: {e}")
-                    if _ == self.max_retries - 1:
-                        logging.error(f"Max retries reached for document. Skipping.")
-        return batch_results
+            logging.error(f"Error processing documents: {e}")
+            return {"entities": [], "relationships": [], "document_metadata": []}
 
     def _finalize_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         for step in self.pipeline_steps:
@@ -213,12 +188,26 @@ class UnstructuredDataProcessor:
             logging.error(f"Input directory does not exist: {input_directory}")
             return {"entities": [], "relationships": [], "document_metadata": []}
 
-        data = await self.process_document(input_directory)
-        # Ensure we're returning a dictionary, not a formatted string
-        if isinstance(data, str):
-            try:
-                return json.loads(data)
-            except json.JSONDecodeError:
-                logging.error("Error decoding JSON output")
+        try:
+            # Load documents from the directory
+            documents = SimpleDirectoryReader(input_dir=input_directory).load_data()
+            
+            if not documents:
+                logging.warning(f"No documents found in directory: {input_directory}")
                 return {"entities": [], "relationships": [], "document_metadata": []}
-        return data
+
+            # Process each document
+            results = []
+            for document in documents:
+                result = await self.process_document(document)
+                results.append(result)
+
+            # Merge results from all documents
+            merged_data = self.merge_results(results)
+            final_data = self._finalize_data(merged_data)
+
+            return self.output_formatter.format_output(final_data)
+
+        except Exception as e:
+            logging.error(f"Error processing documents: {e}")
+            return {"entities": [], "relationships": [], "document_metadata": []}
