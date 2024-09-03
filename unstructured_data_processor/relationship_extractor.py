@@ -1,5 +1,6 @@
 # unstructured_data_processor/relationship_extractor.py
 import json
+import logging
 from typing import List, Dict, Any
 from .rate_limiter import RateLimiter
 
@@ -37,22 +38,25 @@ class RelationshipExtractor:
         """
 
     async def extract_relationships(self, text: str, entities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        prompt = self.generate_prompt(text, entities)
-        response = await self.rate_limiter.execute(self.llm.acomplete, prompt)
+        try:
+            prompt = self.generate_prompt(text, entities)
+            response = await self.rate_limiter.execute(self.llm.acomplete, prompt)
+            
+            if hasattr(response, 'usage') and hasattr(response.usage, 'total_tokens'):
+                self.rate_limiter.update_token_count(response.usage.total_tokens)
+            
+            start = response.text.find('[')
+            end = response.text.rfind(']') + 1
+            if start != -1 and end != -1:
+                json_str = response.text[start:end]
+                try:
+                    relationships = json.loads(json_str)
+                    return relationships
+                except json.JSONDecodeError:
+                    logging.error("Error: Invalid JSON in relationship extraction response")
+            else:
+                logging.error("Error: No valid JSON array found in relationship extraction response")
+        except Exception as e:
+            logging.error(f"Error in relationship extraction: {e}")
         
-        if hasattr(response, 'usage') and hasattr(response.usage, 'total_tokens'):
-            self.rate_limiter.update_token_count(response.usage.total_tokens)
-        
-        start = response.text.find('[')
-        end = response.text.rfind(']') + 1
-        if start != -1 and end != -1:
-            json_str = response.text[start:end]
-            try:
-                relationships = json.loads(json_str)
-                return relationships
-            except json.JSONDecodeError:
-                print("Error: Invalid JSON in relationship extraction response")
-                return []
-        else:
-            print("Error: No valid JSON array found in relationship extraction response")
-            return []
+        return []  # Return an empty list if anything goes wrong
