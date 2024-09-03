@@ -1,5 +1,6 @@
 # unstructured_data_processor/entity_extractor.py
 import json
+import logging
 from typing import List, Dict, Any
 from .rate_limiter import RateLimiter
 
