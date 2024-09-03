@@ -61,7 +61,10 @@ class EntityExtractor:
                         raise ValueError("Extracted entities are not in list format")
                     # Assign unique IDs to entities
                     for entity in entities:
-                        entity['id'] = self.generate_unique_id(entity['type'], entity['name'])
+                        if isinstance(entity, dict) and 'type' in entity and 'name' in entity:
+                            entity['id'] = self.generate_unique_id(entity['type'], entity['name'])
+                        else:
+                            logging.warning(f"Unexpected entity format: {entity}")
                     return entities
                 except json.JSONDecodeError:
                     logging.error("Error: Invalid JSON in entity extraction response")
