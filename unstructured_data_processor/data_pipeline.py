@@ -97,57 +97,57 @@ class UnstructuredDataProcessor:
         }
 
     def merge_results(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
-    all_entities = []
-    all_relationships = []
-    all_document_metadata = []
-    
-    for result in results:
-        all_entities.extend(result.get("entities", []))
-        all_relationships.extend(result.get("relationships", []))
-        all_document_metadata.append(result.get("document_metadata", {}))
+      all_entities = []
+      all_relationships = []
+      all_document_metadata = []
+      
+      for result in results:
+          all_entities.extend(result.get("entities", []))
+          all_relationships.extend(result.get("relationships", []))
+          all_document_metadata.append(result.get("document_metadata", {}))
 
-    # Merge entities with the same ID
-    merged_entities = {}
-    for entity in all_entities:
-        if entity["id"] not in merged_entities:
-            merged_entities[entity["id"]] = entity
-            merged_entities[entity["id"]]["document_metadata"] = set()
-        # Merge metadata
-        merged_entities[entity["id"]]["metadata"].update(entity.get("metadata", {}))
-        # Add document metadata
-        if isinstance(entity.get("document_metadata"), dict):
-            merged_entities[entity["id"]]["document_metadata"].add(
-                frozenset(entity["document_metadata"].items())
-            )
-        else:
-            logging.warning(f"Unexpected document_metadata format for entity {entity['id']}")
+      # Merge entities with the same ID
+      merged_entities = {}
+      for entity in all_entities:
+          if entity["id"] not in merged_entities:
+              merged_entities[entity["id"]] = entity
+              merged_entities[entity["id"]]["document_metadata"] = set()
+          # Merge metadata
+          merged_entities[entity["id"]]["metadata"].update(entity.get("metadata", {}))
+          # Add document metadata
+          if isinstance(entity.get("document_metadata"), dict):
+              merged_entities[entity["id"]]["document_metadata"].add(
+                  frozenset(entity["document_metadata"].items())
+              )
+          else:
+              logging.warning(f"Unexpected document_metadata format for entity {entity['id']}")
 
-    # Remove duplicate relationships while preserving document metadata
-    unique_relationships = {}
-    for r in all_relationships:
-        key = (r["source"], r["target"], r["type"])
-        if key not in unique_relationships:
-            unique_relationships[key] = r
-            unique_relationships[key]["document_metadata"] = set()
-        # Add document metadata
-        if isinstance(r.get("document_metadata"), dict):
-            unique_relationships[key]["document_metadata"].add(
-                frozenset(r["document_metadata"].items())
-            )
-        else:
-            logging.warning(f"Unexpected document_metadata format for relationship {key}")
+      # Remove duplicate relationships while preserving document metadata
+      unique_relationships = {}
+      for r in all_relationships:
+          key = (r["source"], r["target"], r["type"])
+          if key not in unique_relationships:
+              unique_relationships[key] = r
+              unique_relationships[key]["document_metadata"] = set()
+          # Add document metadata
+          if isinstance(r.get("document_metadata"), dict):
+              unique_relationships[key]["document_metadata"].add(
+                  frozenset(r["document_metadata"].items())
+              )
+          else:
+              logging.warning(f"Unexpected document_metadata format for relationship {key}")
 
-    # Convert sets back to lists of dicts for JSON serialization
-    for entity in merged_entities.values():
-        entity["document_metadata"] = [dict(metadata) for metadata in entity["document_metadata"]]
-    for relationship in unique_relationships.values():
-        relationship["document_metadata"] = [dict(metadata) for metadata in relationship["document_metadata"]]
+      # Convert sets back to lists of dicts for JSON serialization
+      for entity in merged_entities.values():
+          entity["document_metadata"] = [dict(metadata) for metadata in entity["document_metadata"]]
+      for relationship in unique_relationships.values():
+          relationship["document_metadata"] = [dict(metadata) for metadata in relationship["document_metadata"]]
 
-    return {
-        "entities": list(merged_entities.values()),
-        "relationships": list(unique_relationships.values()),
-        "document_metadata": all_document_metadata
-    }
+      return {
+          "entities": list(merged_entities.values()),
+          "relationships": list(unique_relationships.values()),
+          "document_metadata": all_document_metadata
+      }
 
     async def process_document(self, document: Document) -> Dict[str, Any]:
         try:
