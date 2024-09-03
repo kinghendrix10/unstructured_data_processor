@@ -8,7 +8,7 @@ class RelationshipExtractor:
         self.llm = llm
         self.rate_limiter = rate_limiter
         self.custom_prompt = None
-        self.relationship_types = ["works_for", "located_in", "part_of", "affiliated_with"]
+        self.relationship_types = ["related_to", "part_of", "located_in", "associated_with"]
 
     def set_custom_prompt(self, custom_prompt: str):
         self.custom_prompt = custom_prompt
@@ -40,11 +40,9 @@ class RelationshipExtractor:
         prompt = self.generate_prompt(text, entities)
         response = await self.rate_limiter.execute(self.llm.acomplete, prompt)
         
-        # Update token count if available
         if hasattr(response, 'usage') and hasattr(response.usage, 'total_tokens'):
             self.rate_limiter.update_token_count(response.usage.total_tokens)
         
-        # Extract JSON from response
         start = response.text.find('[')
         end = response.text.rfind(']') + 1
         if start != -1 and end != -1:
