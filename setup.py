@@ -16,8 +16,7 @@ setup(
         "llama-index-embeddings-fastembed",
         "llama-index-llms-groq"
     ],
-    author="Your Name",
-    author_email="your.email@example.com",
+    author="Huleji Tukura",
     description="A library for processing unstructured data and loading it into Neo4j",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
