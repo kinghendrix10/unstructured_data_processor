@@ -213,7 +213,7 @@ class UnstructuredDataProcessor:
             logging.error(f"Input directory does not exist: {input_directory}")
             return {"entities": [], "relationships": [], "document_metadata": []}
 
-        data = await self.process_documents(input_directory)
+        data = await self.process_document(input_directory)
         # Ensure we're returning a dictionary, not a formatted string
         if isinstance(data, str):
             try:
