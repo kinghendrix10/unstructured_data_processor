@@ -239,7 +239,7 @@ class UnstructuredDataProcessor:
                 return {"entities": [], "relationships": [], "document_metadata": []}
 
             # Process documents in batches
-            results = await self.process_documents(documents)
+            results = await self.process_document(documents)
 
             # Merge results from all documents
             merged_data = self.merge_results(results)
