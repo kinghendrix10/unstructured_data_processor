@@ -119,8 +119,17 @@ class UnstructuredDataProcessor:
                 "document_metadata": document.metadata
             }
 
-    async def process_document(self, document: Document) -> Dict[str, Any]:
+    def _ensure_document(self, doc: Union[str, Document]) -> Document:
+        if isinstance(doc, str):
+            return Document(text=doc, metadata={})
+        elif isinstance(doc, Document):
+            return doc
+        else:
+            raise ValueError(f"Unexpected document type: {type(doc)}")
+
+    async def process_document(self, document: Union[str, Document]) -> Dict[str, Any]:
         try:
+            document = self._ensure_document(document)
             processed_text = self.preprocessor.preprocess_text(document.text)
             
             entities = await self.entity_extractor.extract_entities(processed_text)
@@ -156,10 +165,22 @@ class UnstructuredDataProcessor:
             return {
                 "entities": [],
                 "relationships": [],
-                "document_metadata": document.metadata
+                "document_metadata": getattr(document, 'metadata', {})
             }
 
-    async def _process_batch(self, documents: List[Document]) -> List[Dict[str, Any]]:
+    async def process_documents(self, documents: List[Union[str, Document]]) -> List[Dict[str, Any]]:
+        results = []
+
+        for i in range(0, len(documents), self.batch_size):
+            batch = documents[i:i+self.batch_size]
+            batch_results = await self._process_batch(batch)
+            results.extend(batch_results)
+            if hasattr(self, 'progress_callback'):
+                self.progress_callback(i + len(batch), len(documents))
+
+        return results
+
+    async def _process_batch(self, documents: List[Union[str, Document]]) -> List[Dict[str, Any]]:
         tasks = [self.process_document(doc) for doc in documents]
         return await asyncio.gather(*tasks)
 
@@ -239,7 +260,7 @@ class UnstructuredDataProcessor:
                 return {"entities": [], "relationships": [], "document_metadata": []}
 
             # Process documents in batches
-            results = await self.process_document(documents)
+            results = await self.process_documents(documents)
 
             # Merge results from all documents
             merged_data = self.merge_results(results)
