@@ -1,5 +1,7 @@
 # unstructured_data_processor/data_pipeline.py
 import asyncio
+import json
+import os
 from typing import List, Dict, Any, Callable
 from llama_index.core import SimpleDirectoryReader, Document
 from llama_index.core.node_parser import SentenceSplitter
@@ -29,8 +31,10 @@ class UnstructuredDataProcessor:
         self.batch_size = 10
         self.max_retries = 3
 
-    def set_custom_prompt(self, custom_prompt: str):
+    def set_custom_prompt_entity(self, custom_prompt: str):
         self.entity_extractor.set_custom_prompt(custom_prompt)
+
+    def set_custom_prompt_relationship(self, custom_prompt: str):
         self.relationship_extractor.set_custom_prompt(custom_prompt)
 
     def set_entity_types(self, entity_types: List[str]):
@@ -74,43 +78,100 @@ class UnstructuredDataProcessor:
         else:
             self.pipeline_steps.insert(position, step)
 
+    async def process_document(self, document: Document) -> Dict[str, Any]:
+        processed_text = self.preprocessor.preprocess_text(document.text)
+        
+        entities = await self.entity_extractor.extract_entities(processed_text)
+        relationships = await self.relationship_extractor.extract_relationships(processed_text, entities)
+        
+        # Add document metadata to each entity and relationship
+        for entity in entities:
+            entity['document_metadata'] = document.metadata
+        for relationship in relationships:
+            relationship['document_metadata'] = document.metadata
+        
+        return {
+            "entities": entities,
+            "relationships": relationships,
+            "document_metadata": document.metadata
+        }
+
+    def merge_results(self, results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        all_entities = []
+        all_relationships = []
+        all_document_metadata = []
+        
+        for result in results:
+            all_entities.extend(result["entities"])
+            all_relationships.extend(result["relationships"])
+            all_document_metadata.append(result["document_metadata"])
+
+        # Merge entities with the same ID
+        merged_entities = {}
+        for entity in all_entities:
+            if entity["id"] not in merged_entities:
+                merged_entities[entity["id"]] = entity
+                merged_entities[entity["id"]]["document_metadata"] = set()
+            # Merge metadata
+            merged_entities[entity["id"]]["metadata"].update(entity.get("metadata", {}))
+            # Add document metadata
+            merged_entities[entity["id"]]["document_metadata"].add(tuple(entity["document_metadata"].items()))
+
+        # Remove duplicate relationships while preserving document metadata
+        unique_relationships = {}
+        for r in all_relationships:
+            key = (r["source"], r["target"], r["type"])
+            if key not in unique_relationships:
+                unique_relationships[key] = r
+                unique_relationships[key]["document_metadata"] = set()
+            # Add document metadata
+            unique_relationships[key]["document_metadata"].add(tuple(r["document_metadata"].items()))
+
+        # Convert sets back to lists for JSON serialization
+        for entity in merged_entities.values():
+            entity["document_metadata"] = [dict(metadata) for metadata in entity["document_metadata"]]
+        for relationship in unique_relationships.values():
+            relationship["document_metadata"] = [dict(metadata) for metadata in relationship["document_metadata"]]
+
+        return {
+            "entities": list(merged_entities.values()),
+            "relationships": list(unique_relationships.values()),
+            "document_metadata": all_document_metadata
+        }
+
     async def process_documents(self, input_directory: str) -> Dict[str, Any]:
-        documents = SimpleDirectoryReader(input_dir=input_directory).load_data()
-        processed_docs = []
-        for doc in documents:
-            processed_text = self.preprocessor.preprocess_text(doc.text)
-            processed_docs.append(Document(text=processed_text, metadata=doc.metadata))
+        try:
+            documents = SimpleDirectoryReader(input_dir=input_directory).load_data()
+        except Exception as e:
+            logging.error(f"Error loading documents from {input_directory}: {e}")
+            return {"entities": [], "relationships": [], "document_metadata": []}
 
-        splitter = SentenceSplitter(chunk_size=Settings.chunk_size, chunk_overlap=Settings.chunk_overlap)
-        nodes = splitter.get_nodes_from_documents(processed_docs)
+        results = []
 
-        all_data = {"entities": [], "relationships": []}
-        for i in range(0, len(nodes), self.batch_size):
-            batch = nodes[i:i+self.batch_size]
-            batch_data = await self._process_batch(batch)
-            all_data["entities"].extend(batch_data["entities"])
-            all_data["relationships"].extend(batch_data["relationships"])
+        for i in range(0, len(documents), self.batch_size):
+            batch = documents[i:i+self.batch_size]
+            batch_results = await self._process_batch(batch)
+            results.extend(batch_results)
             if hasattr(self, 'progress_callback'):
-                self.progress_callback(i + len(batch), len(nodes))
+                self.progress_callback(i + len(batch), len(documents))
 
-        final_data = self._finalize_data(all_data)
+        merged_data = self.merge_results(results)
+        final_data = self._finalize_data(merged_data)
         return self.output_formatter.format_output(final_data)
 
-    async def _process_batch(self, nodes: List[Dict[str, Any]]) -> Dict[str, Any]:
-        batch_data = {"entities": [], "relationships": []}
-        for node in nodes:
+    async def _process_batch(self, documents: List[Document]) -> List[Dict[str, Any]]:
+        batch_results = []
+        for document in documents:
             for _ in range(self.max_retries):
                 try:
-                    entities = await self.entity_extractor.extract_entities(node.text)
-                    relationships = await self.relationship_extractor.extract_relationships(node.text, entities)
-                    batch_data["entities"].extend(entities)
-                    batch_data["relationships"].extend(relationships)
+                    result = await self.process_document(document)
+                    batch_results.append(result)
                     break
                 except Exception as e:
-                    logging.error(f"Error processing node: {e}")
+                    logging.error(f"Error processing document: {e}")
                     if _ == self.max_retries - 1:
-                        logging.error(f"Max retries reached for node. Skipping.")
-        return batch_data
+                        logging.error(f"Max retries reached for document. Skipping.")
+        return batch_results
 
     def _finalize_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         for step in self.pipeline_steps:
@@ -118,12 +179,16 @@ class UnstructuredDataProcessor:
         return data
 
     async def restructure_documents(self, input_directory: str) -> Dict[str, Any]:
+        if not os.path.exists(input_directory):
+            logging.error(f"Input directory does not exist: {input_directory}")
+            return {"entities": [], "relationships": [], "document_metadata": []}
+
         data = await self.process_documents(input_directory)
         # Ensure we're returning a dictionary, not a formatted string
         if isinstance(data, str):
             try:
                 return json.loads(data)
             except json.JSONDecodeError:
-                # If it's not valid JSON, return the original structure
-                return {"entities": [], "relationships": []}
+                logging.error("Error decoding JSON output")
+                return {"entities": [], "relationships": [], "document_metadata": []}
         return data
