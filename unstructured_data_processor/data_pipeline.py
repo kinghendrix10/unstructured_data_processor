@@ -119,17 +119,45 @@ class UnstructuredDataProcessor:
                 "document_metadata": document.metadata
             }
 
-    async def process_documents(self, documents: List[Document]) -> List[Dict[str, Any]]:
-        results = []
+    async def process_document(self, document: Document) -> Dict[str, Any]:
+        try:
+            processed_text = self.preprocessor.preprocess_text(document.text)
+            
+            entities = await self.entity_extractor.extract_entities(processed_text)
+            if not isinstance(entities, list):
+                logging.warning(f"Unexpected entity extraction result: {entities}")
+                entities = []
 
-        for i in range(0, len(documents), self.batch_size):
-            batch = documents[i:i+self.batch_size]
-            batch_results = await self._process_batch(batch)
-            results.extend(batch_results)
-            if hasattr(self, 'progress_callback'):
-                self.progress_callback(i + len(batch), len(documents))
+            relationships = await self.relationship_extractor.extract_relationships(processed_text, entities)
+            if not isinstance(relationships, list):
+                logging.warning(f"Unexpected relationship extraction result: {relationships}")
+                relationships = []
+            
+            # Add document metadata to each entity and relationship
+            for entity in entities:
+                if isinstance(entity, dict):
+                    entity['document_metadata'] = document.metadata
+                else:
+                    logging.warning(f"Unexpected entity format: {entity}")
 
-        return results
+            for relationship in relationships:
+                if isinstance(relationship, dict):
+                    relationship['document_metadata'] = document.metadata
+                else:
+                    logging.warning(f"Unexpected relationship format: {relationship}")
+            
+            return {
+                "entities": entities,
+                "relationships": relationships,
+                "document_metadata": document.metadata
+            }
+        except Exception as e:
+            logging.error(f"Error processing document: {e}")
+            return {
+                "entities": [],
+                "relationships": [],
+                "document_metadata": document.metadata
+            }
 
     async def _process_batch(self, documents: List[Document]) -> List[Dict[str, Any]]:
         tasks = [self.process_document(doc) for doc in documents]
@@ -143,7 +171,8 @@ class UnstructuredDataProcessor:
         for result in results:
             all_entities.extend(result.get("entities", []))
             all_relationships.extend(result.get("relationships", []))
-            all_document_metadata.append(result.get("document_metadata", {}))
+            if "document_metadata" in result:
+                all_document_metadata.append(result["document_metadata"])
 
         # Merge entities with the same ID
         merged_entities = {}
@@ -152,14 +181,16 @@ class UnstructuredDataProcessor:
                 merged_entities[entity["id"]] = entity
                 merged_entities[entity["id"]]["document_metadata"] = set()
             # Merge metadata
+            merged_entities[entity["id"]]["metadata"] = merged_entities[entity["id"]].get("metadata", {})
             merged_entities[entity["id"]]["metadata"].update(entity.get("metadata", {}))
             # Add document metadata
-            if isinstance(entity.get("document_metadata"), dict):
+            doc_metadata = entity.get("document_metadata")
+            if isinstance(doc_metadata, dict):
                 merged_entities[entity["id"]]["document_metadata"].add(
-                    frozenset(entity["document_metadata"].items())
+                    frozenset(doc_metadata.items())
                 )
-            else:
-                logging.warning(f"Unexpected document_metadata format for entity {entity['id']}")
+            elif doc_metadata is not None:
+                logging.warning(f"Unexpected document_metadata format for entity {entity['id']}: {type(doc_metadata)}")
 
         # Remove duplicate relationships while preserving document metadata
         unique_relationships = {}
@@ -169,12 +200,13 @@ class UnstructuredDataProcessor:
                 unique_relationships[key] = r
                 unique_relationships[key]["document_metadata"] = set()
             # Add document metadata
-            if isinstance(r.get("document_metadata"), dict):
+            doc_metadata = r.get("document_metadata")
+            if isinstance(doc_metadata, dict):
                 unique_relationships[key]["document_metadata"].add(
-                    frozenset(r["document_metadata"].items())
+                    frozenset(doc_metadata.items())
                 )
-            else:
-                logging.warning(f"Unexpected document_metadata format for relationship {key}")
+            elif doc_metadata is not None:
+                logging.warning(f"Unexpected document_metadata format for relationship {key}: {type(doc_metadata)}")
 
         # Convert sets back to lists of dicts for JSON serialization
         for entity in merged_entities.values():
@@ -216,5 +248,5 @@ class UnstructuredDataProcessor:
             return self.output_formatter.format_output(final_data)
 
         except Exception as e:
-            logging.error(f"Error processing documents: {e}")
+            logging.error(f"Error processing documents: {str(e)}")
             return {"entities": [], "relationships": [], "document_metadata": []}
