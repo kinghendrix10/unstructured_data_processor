@@ -3,7 +3,7 @@
 import asyncio
 import json
 import os
-from typing import List, Dict, Any, Callable
+from typing import List, Dict, Any, Callable, Union
 from llama_index.core import SimpleDirectoryReader, Document
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.embeddings.fastembed import FastEmbedEmbedding
