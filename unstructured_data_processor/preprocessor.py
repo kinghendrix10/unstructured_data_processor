@@ -65,8 +65,8 @@ class Preprocessor:
     def parse_url(self, url: str) -> List[str]:
          if input_path.startswith('http://') or input_path.startswith('https://'):
             return self._parse_url(url)
-        else:
-            raise ValueError(f"Invalid url: {url}")
+         else:
+             raise ValueError(f"Invalid url: {url}")
 
     def _parse_excel(self, file_path: str) -> List[str]:
         df = pd.read_excel(file_path)
