@@ -137,13 +137,50 @@ class UnstructuredDataProcessor:
             data = step(data)
         return data
 
-    async def restructure_documents(self, input_directory: str) -> Dict[str, Any]:
-        data = await self.process_documents(input_directory)
-        # Ensure we're returning a dictionary, not a formatted string
-        if isinstance(data, str):
-            try:
-                return json.loads(data)
-            except json.JSONDecodeError:
-                # If it's not valid JSON, return the original structure
-                return {"entities": [], "relationships": []}
-        return data
+    async def process_urls(self, website_urls: List[str]) -> Dict[str, Any]:
+        processed_docs = []
+        for url in website_urls:
+            parsed_content = self.preprocessor.parse_documents(url)
+            for content in parsed_content:
+                processed_text = self.preprocessor.preprocess_text(content)
+                processed_docs.append(Document(text=processed_text, metadata={"source": url}))
+
+        splitter = SentenceSplitter(chunk_size=Settings.chunk_size, chunk_overlap=Settings.chunk_overlap)
+        nodes = splitter.get_nodes_from_documents(processed_docs)
+
+        all_data = {"entities": [], "relationships": []}
+        entity_id_map = {}
+        for i in range(0, len(nodes), self.batch_size):
+            batch = nodes[i:i+self.batch_size]
+            batch_data = await self._process_batch(batch, entity_id_map)
+            all_data["entities"].extend(batch_data["entities"])
+            all_data["relationships"].extend(batch_data["relationships"])
+            if hasattr(self, 'progress_callback'):
+                self.progress_callback(i + len(batch), len(nodes))
+
+        final_data = self._finalize_data(all_data)
+        return self.output_formatter.format_output(final_data)
+
+    async def restructure_documents(self, input_directory: str = None, website_urls: List[str] = None) -> Dict[str, Any]:
+        all_data = {"entities": [], "relationships": []}
+        if input_directory:
+            data = await self.process_documents(input_directory)
+            if isinstance(data, str):
+                try:
+                    data = json.loads(data)
+                except json.JSONDecodeError:
+                    data = {"entities": [], "relationships": []}
+            all_data["entities"].extend(data["entities"])
+            all_data["relationships"].extend(data["relationships"])
+
+        if website_urls:
+            data = await self.process_urls(website_urls)
+            if isinstance(data, str):
+                try:
+                    data = json.loads(data)
+                except json.JSONDecodeError:
+                    data = {"entities": [], "relationships": []}
+            all_data["entities"].extend(data["entities"])
+            all_data["relationships"].extend(data["relationships"])
+
+        return all_data
