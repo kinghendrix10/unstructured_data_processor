@@ -1,14 +1,13 @@
-# requirements.txt
-llama-index
-neo4j
-llama-index-graph-stores-neo4j
-llama-parse
-qdrant_client
-llama-index-vector-stores-qdrant
-llama-index-embeddings-huggingface
-llama-index-embeddings-fastembed
-llama-index-llms-groq
-pandas
-python-docx
-PyPDF2
-beautifulsoup4
+llama-index==0.5.0
+neo4j==4.4.0
+llama-index-graph-stores-neo4j==0.2.0
+llama-parse==0.1.0
+qdrant_client==0.9.0
+llama-index-vector-stores-qdrant==0.3.0
+llama-index-embeddings-huggingface==0.4.0
+llama-index-embeddings-fastembed==0.3.0
+llama-index-llms-groq==0.2.0
+pandas==1.3.3
+python-docx==0.8.11
+PyPDF2==1.26.0
+beautifulsoup4==4.9.3
