@@ -1,6 +1,11 @@
 # unstructured_data_processor/preprocessor.py
 import re
 from typing import List, Callable
+import pandas as pd
+import docx
+import PyPDF2
+from bs4 import BeautifulSoup
+import requests
 
 class Preprocessor:
     def __init__(self):
@@ -44,3 +49,43 @@ class Preprocessor:
         if self.document_parser:
             return self.document_parser(document)
         return [document]  # Default behavior: treat entire document as one chunk
+
+    def parse_documents(self, input_path: str) -> List[str]:
+        if input_path.endswith('.xlsx'):
+            return self._parse_excel(input_path)
+        elif input_path.endswith('.docx'):
+            return self._parse_docx(input_path)
+        elif input_path.endswith('.pdf'):
+            return self._parse_pdf(input_path)
+        elif input_path.endswith('.txt'):
+            return self._parse_txt(input_path)
+        elif input_path.startswith('http://') or input_path.startswith('https://'):
+            return self._parse_url(input_path)
+        else:
+            raise ValueError(f"Unsupported document format: {input_path}")
+
+    def _parse_excel(self, file_path: str) -> List[str]:
+        df = pd.read_excel(file_path)
+        return df.to_string(index=False).split('\n')
+
+    def _parse_docx(self, file_path: str) -> List[str]:
+        doc = docx.Document(file_path)
+        return [para.text for para in doc.paragraphs]
+
+    def _parse_pdf(self, file_path: str) -> List[str]:
+        with open(file_path, 'rb') as file:
+            reader = PyPDF2.PdfFileReader(file)
+            text = []
+            for page_num in range(reader.numPages):
+                page = reader.getPage(page_num)
+                text.append(page.extract_text())
+            return text
+
+    def _parse_txt(self, file_path: str) -> List[str]:
+        with open(file_path, 'r') as file:
+            return file.readlines()
+
+    def _parse_url(self, url: str) -> List[str]:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        return [soup.get_text()]
