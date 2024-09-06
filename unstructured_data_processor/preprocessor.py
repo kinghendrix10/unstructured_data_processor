@@ -59,10 +59,14 @@ class Preprocessor:
             return self._parse_pdf(input_path)
         elif input_path.endswith('.txt'):
             return self._parse_txt(input_path)
-        elif input_path.startswith('http://') or input_path.startswith('https://'):
-            return self._parse_url(input_path)
         else:
             raise ValueError(f"Unsupported document format: {input_path}")
+            
+    def parse_url(self, url: str) -> List[str]:
+         if input_path.startswith('http://') or input_path.startswith('https://'):
+            return self._parse_url(url)
+        else:
+            raise ValueError(f"Invalid url: {url}")
 
     def _parse_excel(self, file_path: str) -> List[str]:
         df = pd.read_excel(file_path)
