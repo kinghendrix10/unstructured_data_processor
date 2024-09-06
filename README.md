@@ -81,7 +81,8 @@ from llama_index.llms.groq import Groq
         llm,
         rate_limit=60,  # 60 requests per minute
         time_period=60,  # 1 minute
-        max_tokens=1000000  # 1 million tokens (adjust based on your plan)
+        max_tokens=1000000,  # 1 million tokens (adjust based on your plan)
+        verbose=False #Set to True to view log entries
     )
 
     # Customize the processor (optional)
