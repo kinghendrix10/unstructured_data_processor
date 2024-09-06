@@ -14,7 +14,8 @@ setup(
         "llama-index-vector-stores-qdrant",
         "llama-index-embeddings-huggingface",
         "llama-index-embeddings-fastembed",
-        "llama-index-llms-groq"
+        "llama-index-llms-groq",
+        "python-docx"
     ],
     author="Huleji Tukura",
     description="A library for processing unstructured data and loading it into Neo4j",
