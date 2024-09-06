@@ -8,3 +8,7 @@ llama-index-vector-stores-qdrant
 llama-index-embeddings-huggingface
 llama-index-embeddings-fastembed
 llama-index-llms-groq
+pandas
+python-docx
+PyPDF2
+beautifulsoup4

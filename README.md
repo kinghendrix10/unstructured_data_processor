@@ -63,6 +63,45 @@ The Unstructured Data Processor offers various customization options:
 - `enable_progress_tracking(callback)`: Enable progress tracking with a custom callback.
 - `add_pipeline_step(function, position)`: Add a custom step to the processing pipeline.
 
+## Parsing Multiple Document Formats and Website URLs
+
+The Unstructured Data Processor now supports parsing multiple document formats such as Excel, DOC, PDF, and TXT in the input directory, as well as entering website URLs, removing tags, and cleaning the content before processing them.
+
+Here's an example of how to use the new functionality:
+
+```python
+from unstructured_data_processor import UnstructuredDataProcessor, Neo4jLoader
+from llama_index.llms.groq import Groq
+
+    # Initialize the LLM
+    llm = Groq(model="llama3-8b-8192", api_key="your_groq_api_key", temperature=0)
+
+    # Initialize the UnstructuredDataProcessor
+    processor = UnstructuredDataProcessor(
+        llm,
+        rate_limit=60,  # 60 requests per minute
+        time_period=60,  # 1 minute
+        max_tokens=1000000  # 1 million tokens (adjust based on your plan)
+    )
+
+    # Customize the processor (optional)
+    # processor.set_entity_types(["Person", "Organization", "Location", "Event"])
+    # processor.set_output_format("json")
+    # processor.set_batch_size(20)
+
+    # Document folder or URL
+    input_path = "/path/to/your/documents"  # or "https://example.com"
+
+    # Process documents
+    structured_data = await processor.restructure_documents(input_path)
+
+    # Initialize Neo4j loader and load data (optional)
+    # neo4j_loader = Neo4jLoader("bolt://localhost:7687", "neo4j", "password")
+    # neo4j_loader.load_data(structured_data)
+    # neo4j_loader.close()
+
+```
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
