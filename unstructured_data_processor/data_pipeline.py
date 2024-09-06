@@ -17,7 +17,7 @@ from collections import defaultdict
 
 class UnstructuredDataProcessor:
     def __init__(self, llm, embedding_model="BAAI/bge-small-en-v1.5", chunk_size=1024, chunk_overlap=100, 
-                 rate_limit: int = 60, time_period: int = 60, max_tokens: int = None):
+                 rate_limit: int = 60, time_period: int = 60, max_tokens: int = None, verbose: bool = False):
         self.llm = llm
         Settings.embed_model = FastEmbedEmbedding(model_name=embedding_model)
         Settings.chunk_size = chunk_size
@@ -30,6 +30,7 @@ class UnstructuredDataProcessor:
         self.pipeline_steps = []
         self.batch_size = 10
         self.max_retries = 3
+        self.verbose = verbose
 
     def set_custom_prompt(self, custom_prompt: str):
         self.entity_extractor.set_custom_prompt(custom_prompt)
@@ -54,7 +55,10 @@ class UnstructuredDataProcessor:
         self.output_formatter.set_output_format(format)
 
     def set_logging_config(self, log_level: int, log_format: str):
-        logging.basicConfig(level=log_level, format=log_format)
+        if self.verbose:
+            logging.basicConfig(level=logging.DEBUG, format=log_format)
+        else:
+            logging.basicConfig(level=log_level, format=log_format)
 
     def set_llm_model(self, model_name: str, **kwargs):
         self.llm = LLMFactory.get_model(model_name, **kwargs)
@@ -119,9 +123,11 @@ class UnstructuredDataProcessor:
                     batch_data["relationships"].extend(relationships)
                     break
                 except Exception as e:
-                    logging.error(f"Error processing node: {e}")
+                    if self.verbose:
+                        logging.error(f"Error processing node: {e}")
                     if _ == self.max_retries - 1:
-                        logging.error(f"Max retries reached for node. Skipping.")
+                        if self.verbose:
+                            logging.error(f"Max retries reached for node. Skipping.")
         return batch_data
 
     def _finalize_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
