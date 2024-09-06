@@ -83,9 +83,11 @@ class UnstructuredDataProcessor:
     async def process_documents(self, input_directory: str) -> Dict[str, Any]:
         documents = SimpleDirectoryReader(input_dir=input_directory).load_data()
         processed_docs = []
-        for doc in documents:
-            processed_text = self.preprocessor.preprocess_text(doc.text)
-            processed_docs.append(Document(text=processed_text, metadata=doc.metadata))
+        for document in documents:
+            parsed_content = self.preprocessor.parse_documents(document.text_or_filepath)
+            for content in parsed_content:
+                processed_text = self.preprocessor.preprocess_text(content)
+                processed_docs.append(Document(text=processed_text, metadata=document.metadata))
 
         splitter = SentenceSplitter(chunk_size=Settings.chunk_size, chunk_overlap=Settings.chunk_overlap)
         nodes = splitter.get_nodes_from_documents(processed_docs)
