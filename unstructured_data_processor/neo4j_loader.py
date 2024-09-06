@@ -62,7 +62,9 @@ class Neo4jLoader:
         query = (
             f"MATCH (source) WHERE source.id = $source_id "
             f"MATCH (target) WHERE target.id = $target_id "
-            f"CREATE (source)-[r:{rel_type} {{metadata: $metadata}}]->(target)"
+            f"MERGE (source)-[r:{rel_type}]->(target) "
+            f"ON CREATE SET r.metadata = $metadata "
+            f"ON MATCH SET r.metadata = apoc.map.merge(r.metadata, $metadata)"
         )
         tx.run(query, source_id=rel['source'], target_id=rel['target'],
                metadata=json.dumps(rel['metadata']))

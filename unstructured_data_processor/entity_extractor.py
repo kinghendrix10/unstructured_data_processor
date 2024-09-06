@@ -9,6 +9,8 @@ class EntityExtractor:
         self.rate_limiter = rate_limiter
         self.custom_prompt = None
         self.entity_types = ["Person", "Organization", "Location", "Event", "Concept"]
+        self.entity_id_counter = 0
+        self.entity_id_map = {}
 
     def set_custom_prompt(self, custom_prompt: str):
         self.custom_prompt = custom_prompt
@@ -46,6 +48,9 @@ class EntityExtractor:
             json_str = response.text[start:end]
             try:
                 entities = json.loads(json_str)
+                for entity in entities:
+                    entity_id = self._generate_unique_entity_id(entity)
+                    entity['id'] = entity_id
                 return entities
             except json.JSONDecodeError:
                 print("Error: Invalid JSON in entity extraction response")
@@ -53,3 +58,13 @@ class EntityExtractor:
         else:
             print("Error: No valid JSON array found in entity extraction response")
             return []
+
+    def _generate_unique_entity_id(self, entity: Dict[str, Any]) -> str:
+        entity_key = (entity['type'], entity['name'])
+        if entity_key in self.entity_id_map:
+            return self.entity_id_map[entity_key]
+        else:
+            unique_id = f"{entity['type'].upper()}_{self.entity_id_counter}"
+            self.entity_id_counter += 1
+            self.entity_id_map[entity_key] = unique_id
+            return unique_id
