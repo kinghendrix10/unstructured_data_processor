@@ -63,7 +63,7 @@ class Preprocessor:
             raise ValueError(f"Unsupported document format: {input_path}")
             
     def parse_url(self, url: str) -> List[str]:
-         if input_path.startswith('http://') or input_path.startswith('https://'):
+         if url.startswith('http://') or url.startswith('https://'):
             return self._parse_url(url)
          else:
              raise ValueError(f"Invalid url: {url}")
