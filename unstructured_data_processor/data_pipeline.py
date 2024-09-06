@@ -84,7 +84,7 @@ class UnstructuredDataProcessor:
         documents = SimpleDirectoryReader(input_dir=input_directory).load_data()
         processed_docs = []
         for document in documents:
-            parsed_content = self.preprocessor.parse_documents(document.text_or_filepath)
+            parsed_content = self.preprocessor.parse_documents(document.text)
             for content in parsed_content:
                 processed_text = self.preprocessor.preprocess_text(content)
                 processed_docs.append(Document(text=processed_text, metadata=document.metadata))
