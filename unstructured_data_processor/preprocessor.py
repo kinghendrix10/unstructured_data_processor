@@ -4,8 +4,6 @@ from typing import List, Callable
 import pandas as pd
 import docx
 import PyPDF2
-from bs4 import BeautifulSoup
-import requests
 
 class Preprocessor:
     def __init__(self):
@@ -59,8 +57,6 @@ class Preprocessor:
             return self._parse_pdf(input_path)
         elif input_path.endswith('.txt'):
             return self._parse_txt(input_path)
-        elif input_path.startswith('http://') or input_path.startswith('https://'):
-            return self._parse_url(input_path)
         else:
             raise ValueError(f"Unsupported document format: {input_path}")
 
@@ -84,8 +80,3 @@ class Preprocessor:
     def _parse_txt(self, file_path: str) -> List[str]:
         with open(file_path, 'r') as file:
             return file.readlines()
-
-    def _parse_url(self, url: str) -> List[str]:
-        response = requests.get(url)
-        soup = BeautifulSoup(response.content, 'html.parser')
-        return [soup.get_text()]

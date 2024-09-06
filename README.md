@@ -34,9 +34,10 @@ from llama_index.llms.groq import Groq
 
     # Document folder
     input_directory = "/path/to/your/documents"
+    website_urls = ["https://example.com", "https://anotherexample.com"]
 
     # Process documents
-    structured_data = await processor.restructure_documents(input_directory)
+    structured_data = await processor.restructure_documents(input_directory, website_urls)
 
     # Initialize Neo4j loader and load data (optional)
     # neo4j_loader = Neo4jLoader("bolt://localhost:7687", "neo4j", "password")
@@ -91,10 +92,11 @@ from llama_index.llms.groq import Groq
     # processor.set_batch_size(20)
 
     # Document folder or URL
-    input_path = "/path/to/your/documents"  # or "https://example.com"
+    input_directory = "/path/to/your/documents"
+    website_urls = ["https://example.com", "https://anotherexample.com"]
 
     # Process documents
-    structured_data = await processor.restructure_documents(input_path)
+    structured_data = await processor.restructure_documents(input_directory, website_urls)
 
     # Initialize Neo4j loader and load data (optional)
     # neo4j_loader = Neo4jLoader("bolt://localhost:7687", "neo4j", "password")
