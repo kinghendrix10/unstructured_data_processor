@@ -63,10 +63,18 @@ class Preprocessor:
             raise ValueError(f"Unsupported document format: {input_path}")
             
     def parse_url(self, url: str) -> List[str]:
-         if url.startswith('http://') or url.startswith('https://'):
+        url_pattern = re.compile(
+            r'^(https?|ftp)://'
+            r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|'
+            r'localhost|'
+            r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|'
+            r'\[?[A-F0-9]*:[A-F0-9:]+\]?)'
+            r'(?::\d+)?'
+            r'(?:/?|[/?]\S+)$', re.IGNORECASE)
+        if re.match(url_pattern, url):
             return self._parse_url(url)
-         else:
-             raise ValueError(f"Invalid url: {url}")
+        else:
+            raise ValueError(f"Invalid url: {url}")
 
     def _parse_excel(self, file_path: str) -> List[str]:
         df = pd.read_excel(file_path)
