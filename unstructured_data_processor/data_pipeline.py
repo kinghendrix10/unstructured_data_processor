@@ -140,7 +140,7 @@ class UnstructuredDataProcessor:
     async def process_urls(self, website_urls: List[str]) -> Dict[str, Any]:
         processed_docs = []
         for url in website_urls:
-            parsed_content = self.preprocessor.parse_documents(url)
+            parsed_content = self.preprocessor.parse_url(url)
             for content in parsed_content:
                 processed_text = self.preprocessor.preprocess_text(content)
                 processed_docs.append(Document(text=processed_text, metadata={"source": url}))
