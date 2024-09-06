@@ -26,7 +26,7 @@ class EntityExtractor:
             return self.custom_prompt.format(text=text, entity_types=", ".join(self.entity_types))
         return f"""
         Analyze the following text and extract entities. Identify entities of the following types: {", ".join(self.entity_types)}.
-        For each entity, provide an ID, type, name, and any relevant metadata.
+        For each entity, provide an ID, type, name, and any relevant metadata such as relationships, attributes, and context.
         
         Text: {text}
         
