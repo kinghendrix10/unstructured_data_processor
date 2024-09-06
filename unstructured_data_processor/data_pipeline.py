@@ -12,6 +12,8 @@ from .relationship_extractor import RelationshipExtractor
 from .output_formatter import OutputFormatter
 from .llm_factory import LLMFactory
 import logging
+import json
+from collections import defaultdict
 
 class UnstructuredDataProcessor:
     def __init__(self, llm, embedding_model="BAAI/bge-small-en-v1.5", chunk_size=1024, chunk_overlap=100, 
@@ -85,9 +87,10 @@ class UnstructuredDataProcessor:
         nodes = splitter.get_nodes_from_documents(processed_docs)
 
         all_data = {"entities": [], "relationships": []}
+        entity_id_map = {}
         for i in range(0, len(nodes), self.batch_size):
             batch = nodes[i:i+self.batch_size]
-            batch_data = await self._process_batch(batch)
+            batch_data = await self._process_batch(batch, entity_id_map)
             all_data["entities"].extend(batch_data["entities"])
             all_data["relationships"].extend(batch_data["relationships"])
             if hasattr(self, 'progress_callback'):
@@ -96,14 +99,23 @@ class UnstructuredDataProcessor:
         final_data = self._finalize_data(all_data)
         return self.output_formatter.format_output(final_data)
 
-    async def _process_batch(self, nodes: List[Dict[str, Any]]) -> Dict[str, Any]:
+    async def _process_batch(self, nodes: List[Dict[str, Any]], entity_id_map: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
         batch_data = {"entities": [], "relationships": []}
         for node in nodes:
             for _ in range(self.max_retries):
                 try:
                     entities = await self.entity_extractor.extract_entities(node.text)
                     relationships = await self.relationship_extractor.extract_relationships(node.text, entities)
-                    batch_data["entities"].extend(entities)
+                    
+                    # Ensure unique entity IDs and merge metadata for duplicates
+                    for entity in entities:
+                        if entity['id'] in entity_id_map:
+                            existing_entity = entity_id_map[entity['id']]
+                            existing_entity['metadata'].update(entity['metadata'])
+                        else:
+                            entity_id_map[entity['id']] = entity
+                            batch_data["entities"].append(entity)
+                    
                     batch_data["relationships"].extend(relationships)
                     break
                 except Exception as e:
