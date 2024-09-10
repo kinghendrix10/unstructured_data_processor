@@ -1,7 +1,7 @@
 # unstructured_data_processor/data_pipeline.py
 import asyncio
 from typing import List, Dict, Any, Callable
-from llama_index.core import SimpleDirectoryReader, Document
+from llama_index.core import Document
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.embeddings.fastembed import FastEmbedEmbedding
 from llama_index.core import Settings
@@ -11,6 +11,7 @@ from .entity_extractor import EntityExtractor
 from .relationship_extractor import RelationshipExtractor
 from .output_formatter import OutputFormatter
 from .llm_factory import LLMFactory
+from .directory_reader import DirectoryReader
 import logging
 import json
 from collections import defaultdict
@@ -81,13 +82,13 @@ class UnstructuredDataProcessor:
             self.pipeline_steps.insert(position, step)
 
     async def process_documents(self, input_directory: str) -> Dict[str, Any]:
-        documents = SimpleDirectoryReader(input_dir=input_directory).load_data()
+        reader = DirectoryReader(input_dir=input_directory, recursive=True, max_workers=4)
+        documents = reader.load_data()
         processed_docs = []
         for document in documents:
-            # parsed_content = self.preprocessor.parse_documents(document.text)
-            for content in document.text: #parsed_content:
+            for content in document["text"]:
                 processed_text = self.preprocessor.preprocess_text(content)
-                processed_docs.append(Document(text=processed_text, metadata=document.metadata))
+                processed_docs.append(Document(text=processed_text, metadata=document["metadata"]))
 
         splitter = SentenceSplitter(chunk_size=Settings.chunk_size, chunk_overlap=Settings.chunk_overlap)
         nodes = splitter.get_nodes_from_documents(processed_docs)
