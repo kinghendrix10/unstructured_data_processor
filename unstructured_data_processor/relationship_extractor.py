@@ -33,6 +33,21 @@ class RelationshipExtractor:
         {entity_str}
         
         For each relationship, provide a source entity ID, target entity ID, relationship type, and any relevant metadata.
+        
+        Example:
+        Text: "John Doe, a software engineer at OpenAI, lives in San Francisco."
+        Entities:
+        PERSON_0: John Doe (Person)
+        ORGANIZATION_1: OpenAI (Organization)
+        LOCATION_2: San Francisco (Location)
+        Output: [
+            {"source": "PERSON_0", "target": "ORGANIZATION_1", "type": "works_for", "metadata": {"role": "software engineer"}},
+            {"source": "PERSON_0", "target": "LOCATION_2", "type": "located_in", "metadata": {"city": "San Francisco"}}
+        ]
+        
+        Now, analyze the following text and extract relationships:
+        Text: {text}
+        
         Output the result as a JSON array of relationships.
         """
 

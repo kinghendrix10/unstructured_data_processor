@@ -105,6 +105,69 @@ from llama_index.llms.groq import Groq
 
 ```
 
+## Detailed Example in Prompt for Entity and Relationship Extraction
+
+The Unstructured Data Processor now includes a detailed example in the prompt for entity and relationship extraction. This helps in understanding how to structure the input and what kind of output to expect.
+
+### Entity Extraction Example
+
+```python
+from unstructured_data_processor.entity_extractor import EntityExtractor
+from llama_index.llms.groq import Groq
+from unstructured_data_processor.rate_limiter import RateLimiter
+
+# Initialize the LLM and RateLimiter
+llm = Groq(model="llama3-8b-8192", api_key="your_groq_api_key", temperature=0)
+rate_limiter = RateLimiter(rate_limit=60, time_period=60, max_tokens=1000000)
+
+# Initialize the EntityExtractor
+entity_extractor = EntityExtractor(llm, rate_limiter)
+
+# Example text
+text = "John Doe, a software engineer at OpenAI, lives in San Francisco."
+
+# Generate prompt and extract entities
+prompt = entity_extractor.generate_prompt(text)
+entities = await entity_extractor.extract_entities(text)
+
+print("Generated Prompt:")
+print(prompt)
+print("Extracted Entities:")
+print(entities)
+```
+
+### Relationship Extraction Example
+
+```python
+from unstructured_data_processor.relationship_extractor import RelationshipExtractor
+from llama_index.llms.groq import Groq
+from unstructured_data_processor.rate_limiter import RateLimiter
+
+# Initialize the LLM and RateLimiter
+llm = Groq(model="llama3-8b-8192", api_key="your_groq_api_key", temperature=0)
+rate_limiter = RateLimiter(rate_limit=60, time_period=60, max_tokens=1000000)
+
+# Initialize the RelationshipExtractor
+relationship_extractor = RelationshipExtractor(llm, rate_limiter)
+
+# Example text and entities
+text = "John Doe, a software engineer at OpenAI, lives in San Francisco."
+entities = [
+    {"id": "PERSON_0", "type": "Person", "name": "John Doe", "metadata": {"occupation": "software engineer", "organization": "OpenAI", "location": "San Francisco"}},
+    {"id": "ORGANIZATION_1", "type": "Organization", "name": "OpenAI", "metadata": {}},
+    {"id": "LOCATION_2", "type": "Location", "name": "San Francisco", "metadata": {}}
+]
+
+# Generate prompt and extract relationships
+prompt = relationship_extractor.generate_prompt(text, entities)
+relationships = await relationship_extractor.extract_relationships(text, entities)
+
+print("Generated Prompt:")
+print(prompt)
+print("Extracted Relationships:")
+print(relationships)
+```
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
