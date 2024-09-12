@@ -1,14 +1,13 @@
 import os
 import concurrent.futures
 from typing import List, Dict, Any, Generator
-from .preprocessor import Preprocessor
+import chardet
 
 class DirectoryReader:
     def __init__(self, input_dir: str, recursive: bool = False, max_workers: int = 1):
         self.input_dir = input_dir
         self.recursive = recursive
         self.max_workers = max_workers
-        self.preprocessor = Preprocessor()
 
     def _get_file_paths(self) -> List[str]:
         file_paths = []
@@ -21,8 +20,13 @@ class DirectoryReader:
 
     def _load_file(self, file_path: str) -> Dict[str, Any]:
         try:
-            with open(file_path, 'r') as file:
+            with open(file_path, 'rb') as file:
+                raw_data = file.read()
+                encoding = chardet.detect(raw_data)['encoding']
+            
+            with open(file_path, 'r', encoding=encoding) as file:
                 content = file.read()
+            
             metadata = self._extract_metadata(file_path)
             return {"text": content, "metadata": metadata}
         except Exception as e:
