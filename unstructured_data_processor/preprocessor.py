@@ -3,7 +3,6 @@ import re
 from typing import List, Callable
 import pandas as pd
 import docx
-import PyPDF2
 from bs4 import BeautifulSoup
 import requests
 import chardet
@@ -56,8 +55,6 @@ class Preprocessor:
             return self._parse_excel(input_path)
         elif input_path.endswith('.docx'):
             return self._parse_docx(input_path)
-        elif input_path.endswith('.pdf'):
-            return self._parse_pdf(input_path)
         elif input_path.endswith('.txt'):
             return self._parse_txt(input_path)
         else:
@@ -85,18 +82,6 @@ class Preprocessor:
         doc = docx.Document(file_path)
         return [para.text for para in doc.paragraphs]
 
-    def _parse_pdf(self, file_path: str) -> List[str]:
-        try:
-            with open(file_path, 'rb') as file:
-                reader = PyPDF2.PdfReader(file)
-                text = []
-                for page in reader.pages:
-                    text.append(page.extract_text())
-                return text
-        except Exception as e:
-            print(f"Error parsing PDF file {file_path}: {e}")
-            return []
-
     def _parse_txt(self, file_path: str) -> List[str]:
         try:
             with open(file_path, 'rb') as file:
@@ -108,6 +93,11 @@ class Preprocessor:
         except Exception as e:
             print(f"Error parsing text file {file_path}: {e}")
             return []
+
+    def _parse_url(self, url: str) -> List[str]:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        return [soup.get_text()]
 
     def _parse_url(self, url: str) -> List[str]:
         response = requests.get(url)
