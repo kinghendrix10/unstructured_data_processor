@@ -2,6 +2,7 @@ import os
 import concurrent.futures
 from typing import List, Dict, Any, Generator
 import chardet
+import PyPDF2
 
 class DirectoryReader:
     def __init__(self, input_dir: str, recursive: bool = False, max_workers: int = 1):
@@ -20,6 +21,30 @@ class DirectoryReader:
 
     def _load_file(self, file_path: str) -> Dict[str, Any]:
         try:
+            if file_path.lower().endswith('.pdf'):
+                return self._load_pdf(file_path)
+            else:
+                return self._load_text_file(file_path)
+        except Exception as e:
+            print(f"Error loading file {file_path}: {e}")
+            return {"text": "", "metadata": {}}
+
+    def _load_pdf(self, file_path: str) -> Dict[str, Any]:
+        try:
+            with open(file_path, 'rb') as file:
+                reader = PyPDF2.PdfReader(file)
+                text = []
+                for page in reader.pages:
+                    text.append(page.extract_text())
+            content = "\n".join(text)
+            metadata = self._extract_metadata(file_path)
+            return {"text": content, "metadata": metadata}
+        except Exception as e:
+            print(f"Error loading PDF file {file_path}: {e}")
+            return {"text": "", "metadata": {}}
+
+    def _load_text_file(self, file_path: str) -> Dict[str, Any]:
+        try:
             with open(file_path, 'rb') as file:
                 raw_data = file.read()
                 encoding = chardet.detect(raw_data)['encoding']
@@ -30,7 +55,7 @@ class DirectoryReader:
             metadata = self._extract_metadata(file_path)
             return {"text": content, "metadata": metadata}
         except Exception as e:
-            print(f"Error loading file {file_path}: {e}")
+            print(f"Error loading text file {file_path}: {e}")
             return {"text": "", "metadata": {}}
 
     def _extract_metadata(self, file_path: str) -> Dict[str, Any]:
