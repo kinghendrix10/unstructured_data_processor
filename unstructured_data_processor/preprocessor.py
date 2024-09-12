@@ -6,6 +6,7 @@ import docx
 import PyPDF2
 from bs4 import BeautifulSoup
 import requests
+import chardet
 
 class Preprocessor:
     def __init__(self):
@@ -85,17 +86,28 @@ class Preprocessor:
         return [para.text for para in doc.paragraphs]
 
     def _parse_pdf(self, file_path: str) -> List[str]:
-        with open(file_path, 'rb') as file:
-            reader = PyPDF2.PdfFileReader(file)
-            text = []
-            for page_num in range(reader.numPages):
-                page = reader.getPage(page_num)
-                text.append(page.extract_text())
-            return text
+        try:
+            with open(file_path, 'rb') as file:
+                reader = PyPDF2.PdfReader(file)
+                text = []
+                for page in reader.pages:
+                    text.append(page.extract_text())
+                return text
+        except Exception as e:
+            print(f"Error parsing PDF file {file_path}: {e}")
+            return []
 
     def _parse_txt(self, file_path: str) -> List[str]:
-        with open(file_path, 'r') as file:
-            return file.readlines()
+        try:
+            with open(file_path, 'rb') as file:
+                raw_data = file.read()
+                encoding = chardet.detect(raw_data)['encoding']
+            
+            with open(file_path, 'r', encoding=encoding) as file:
+                return file.readlines()
+        except Exception as e:
+            print(f"Error parsing text file {file_path}: {e}")
+            return []
 
     def _parse_url(self, url: str) -> List[str]:
         response = requests.get(url)
