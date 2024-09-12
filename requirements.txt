@@ -12,3 +12,4 @@ python-docx==0.8.11
 PyPDF2==1.26.0
 beautifulsoup4==4.9.3
 concurrent.futures
+chardet
