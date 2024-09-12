@@ -24,32 +24,32 @@ class RelationshipExtractor:
         if self.custom_prompt:
             return self.custom_prompt.format(text=text, entities=entity_str, relationship_types=", ".join(self.relationship_types))
         return f"""
-        Analyze the following text and extract relationships between the given entities. 
-        Consider relationship types such as: {", ".join(self.relationship_types)}.
-        
-        Text: {text}
-        
-        Entities:
-        {entity_str}
-        
-        For each relationship, provide a source entity ID, target entity ID, relationship type, and any relevant metadata.
-        
-        Example:
-        Text: "John Doe, a software engineer at OpenAI, lives in San Francisco."
-        Entities:
-        PERSON_0: John Doe (Person)
-        ORGANIZATION_1: OpenAI (Organization)
-        LOCATION_2: San Francisco (Location)
-        Output: [
-            {"source": "PERSON_0", "target": "ORGANIZATION_1", "type": "works_for", "metadata": {"role": "software engineer"}},
-            {"source": "PERSON_0", "target": "LOCATION_2", "type": "located_in", "metadata": {"city": "San Francisco"}}
-        ]
-        
-        Now, analyze the following text and extract relationships:
-        Text: {text}
-        
-        Output the result as a JSON array of relationships.
-        """
+Analyze the following text and extract relationships between the given entities. 
+Consider relationship types such as: {", ".join(self.relationship_types)}.
+
+Text: {text}
+
+Entities:
+{entity_str}
+
+For each relationship, provide a source entity ID, target entity ID, relationship type, and any relevant metadata.
+
+Example:
+Text: "John Doe, a software engineer at OpenAI, lives in San Francisco."
+Entities:
+PERSON_0: John Doe (Person)
+ORGANIZATION_1: OpenAI (Organization)
+LOCATION_2: San Francisco (Location)
+Output: [
+    {{"source": "PERSON_0", "target": "ORGANIZATION_1", "type": "works_for", "metadata": {{"role": "software engineer"}}}},
+    {{"source": "PERSON_0", "target": "LOCATION_2", "type": "located_in", "metadata": {{"residence": "San Francisco"}}}}
+]
+
+Now, analyze the following text and extract relationships:
+Text: {text}
+
+Output the result as a JSON array of relationships.
+"""
 
     async def extract_relationships(self, text: str, entities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         prompt = self.generate_prompt(text, entities)
