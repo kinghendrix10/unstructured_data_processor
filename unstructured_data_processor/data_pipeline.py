@@ -118,14 +118,12 @@ class UnstructuredDataProcessor:
                 documents.append({"text": processed_text, "metadata": {"source": url}})
         return await self._process_documents(documents)
 
-    async def _process_documents(self, documents: List[Dict[str, Any]]) -> Dict[str, Any]:
-        processed_docs = []
-        for document in documents:
-            processed_text = self.preprocessor.preprocess_text(document["text"])
-            processed_docs.append(Document(text=processed_text, metadata=document["metadata"]))
-
+    async def process_data(self, input_data: Union[str, List[str]], output_dir: str = None, max_pages: int = 10) -> Dict[str, Any]:
+        preprocessed_data = await self.preprocessor.process_input(input_data, output_dir, max_pages)
+        documents = [Document(text=item['text'], metadata=item['metadata']) for item in preprocessed_data]
+        
         splitter = SentenceSplitter(chunk_size=Settings.chunk_size, chunk_overlap=Settings.chunk_overlap)
-        nodes = splitter.get_nodes_from_documents(processed_docs)
+        nodes = splitter.get_nodes_from_documents(documents)
 
         all_data = {"entities": [], "relationships": []}
         entity_id_map = {}
