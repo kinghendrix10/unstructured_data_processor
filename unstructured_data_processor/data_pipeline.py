@@ -15,6 +15,7 @@ from .directory_reader import DirectoryReader
 from .utils import setup_logging, progress_callback, run_with_retry, chunk_list
 import logging
 import json
+import PyPDF2
 from pathlib import Path
 
 class UnstructuredDataProcessor:
