@@ -52,9 +52,9 @@ class Preprocessor:
     async def process_input(self, input_data: Any, output_dir: str = None, max_pages: int = 10) -> List[Dict[str, Any]]:
         if isinstance(input_data, str):
             if input_data.startswith('http://') or input_data.startswith('https://'):
-                if not output_dir:
-                    output_dir = "crawled_websites"
-                os.makedirs(output_dir, exist_ok=True)
+                # if not output_dir:
+                #     output_dir = "crawled_websites"
+                # os.makedirs(output_dir, exist_ok=True)
                 return await self.process_website(input_data, output_dir, max_pages)
             elif Path(input_data).is_dir():
                 return self.process_directory(input_data)
