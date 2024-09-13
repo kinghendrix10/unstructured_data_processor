@@ -76,6 +76,8 @@ class Preprocessor:
             content = self._parse_docx(file_path)
         elif file_extension == '.txt':
             content = self._parse_txt(file_path)
+        elif file_extension == '.pdf':
+            content = self._parse_pdf(file_path)
         else:
             raise ValueError(f"Unsupported file format: {file_extension}")
         
@@ -174,4 +176,13 @@ class Preprocessor:
                 return file.read()
         except Exception as e:
             print(f"Error parsing text file {file_path}: {e}")
+            return ""
+
+    def _parse_pdf(self, file_path: str) -> str:
+        try:
+            with open(file_path, 'rb') as file:
+                reader = PyPDF2.PdfReader(file)
+                return '\n'.join([page.extract_text() for page in reader.pages])
+        except Exception as e:
+            print(f"Error parsing PDF file {file_path}: {e}")
             return ""
