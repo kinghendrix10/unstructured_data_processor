@@ -1,11 +1,12 @@
 # unstructured_data_processor/preprocessor.py
 import re
-from typing import List, Callable
+from typing import List, Callable, Dict, Any
 import pandas as pd
 import docx
-import PyPDF2
 from bs4 import BeautifulSoup
 import requests
+import chardet
+from pathlib import Path
 
 class Preprocessor:
     def __init__(self):
@@ -50,18 +51,17 @@ class Preprocessor:
             return self.document_parser(document)
         return [document]  # Default behavior: treat entire document as one chunk
 
-    def parse_documents(self, input_path: str) -> List[str]:
-        if input_path.endswith('.xlsx'):
-            return self._parse_excel(input_path)
-        elif input_path.endswith('.docx'):
-            return self._parse_docx(input_path)
-        elif input_path.endswith('.pdf'):
-            return self._parse_pdf(input_path)
-        elif input_path.endswith('.txt'):
-            return self._parse_txt(input_path)
+    def parse_file(self, file_path: str) -> List[str]:
+        file_extension = Path(file_path).suffix.lower()
+        if file_extension == '.xlsx':
+            return self._parse_excel(file_path)
+        elif file_extension == '.docx':
+            return self._parse_docx(file_path)
+        elif file_extension == '.txt':
+            return self._parse_txt(file_path)
         else:
-            raise ValueError(f"Unsupported document format: {input_path}")
-            
+            raise ValueError(f"Unsupported document format: {file_extension}")
+
     def parse_url(self, url: str) -> List[str]:
         url_pattern = re.compile(
             r'^(https?|ftp)://'
@@ -84,18 +84,17 @@ class Preprocessor:
         doc = docx.Document(file_path)
         return [para.text for para in doc.paragraphs]
 
-    def _parse_pdf(self, file_path: str) -> List[str]:
-        with open(file_path, 'rb') as file:
-            reader = PyPDF2.PdfFileReader(file)
-            text = []
-            for page_num in range(reader.numPages):
-                page = reader.getPage(page_num)
-                text.append(page.extract_text())
-            return text
-
     def _parse_txt(self, file_path: str) -> List[str]:
-        with open(file_path, 'r') as file:
-            return file.readlines()
+        try:
+            with open(file_path, 'rb') as file:
+                raw_data = file.read()
+                encoding = chardet.detect(raw_data)['encoding'] or 'utf-8'
+            
+            with open(file_path, 'r', encoding=encoding) as file:
+                return file.readlines()
+        except Exception as e:
+            print(f"Error parsing text file {file_path}: {e}")
+            return []
 
     def _parse_url(self, url: str) -> List[str]:
         response = requests.get(url)

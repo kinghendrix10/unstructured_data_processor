@@ -25,13 +25,26 @@ class EntityExtractor:
         if self.custom_prompt:
             return self.custom_prompt.format(text=text, entity_types=", ".join(self.entity_types))
         return f"""
-        Analyze the following text and extract entities. Identify entities of the following types: {", ".join(self.entity_types)}.
-        For each entity, provide an ID, type, name, and any relevant metadata such as relationships, attributes, and context.
-        
-        Text: {text}
-        
-        Output the result as a JSON array of entities.
-        """
+You are a top-tier algorithm designed for extracting information in structured formats to build a knowledge graph. Your task is to identify the entities and relations requested with the user prompt from a given text. You must generate the output in a JSON format containing a list with JSON objects.
+
+Analyze the following text and extract entities. Identify entities of the following types: {", ".join(self.entity_types)}.
+For each entity, provide an ID, type, name, and any relevant metadata such as relationships, attributes, and context.
+
+Text: {text}
+
+Example:
+Text: "John Doe, a software engineer at OpenAI, lives in San Francisco."
+Output: [
+    {{"id": "PERSON_0", "type": "Person", "name": "John Doe", "metadata": {{"occupation": "software engineer", "organization": "OpenAI", "location": "San Francisco"}}}},
+    {{"id": "ORGANIZATION_1", "type": "Organization", "name": "OpenAI", "metadata": {{}}}},
+    {{"id": "LOCATION_2", "type": "Location", "name": "San Francisco", "metadata": {{}}}}
+]
+
+Now, analyze the following text and extract entities:
+Text: {text}
+
+Output the result as a JSON array of entities.
+"""
 
     async def extract_entities(self, text: str) -> List[Dict[str, Any]]:
         prompt = self.generate_prompt(text)
