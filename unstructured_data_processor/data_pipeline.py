@@ -118,6 +118,19 @@ class UnstructuredDataProcessor:
                 documents.append({"text": processed_text, "metadata": {"source": url}})
         return await self._process_documents(documents)
 
+    async def _process_file(self, file_path: str) -> Dict[str, Any]:
+        # Create a temporary directory to hold the single file
+        temp_dir = os.path.dirname(file_path)
+        
+        # Initialize DirectoryReader with the directory containing the file
+        reader = DirectoryReader(input_dir=temp_dir, recursive=False, max_workers=1)
+        
+        # Filter to only process the specific file
+        reader.input_files = [file_path]
+        
+        documents = reader.load_data()
+        return await self._process_documents(documents)
+
     async def process_data(self, input_data: Union[str, List[str]], output_dir: str = None, max_pages: int = 10) -> Dict[str, Any]:
         preprocessed_data = await self.preprocessor.process_input(input_data, output_dir, max_pages)
         documents = [Document(text=item['text'], metadata=item['metadata']) for item in preprocessed_data]
