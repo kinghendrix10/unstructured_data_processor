@@ -1,5 +1,4 @@
 #unstructured_data_processor/directory_reader.py
-
 import os
 import concurrent.futures
 from typing import List, Dict, Any, Generator, Optional
