@@ -99,25 +99,6 @@ class UnstructuredDataProcessor:
         else:
             raise ValueError("Input must be a file path, directory path, or list of URLs")
 
-    async def _process_directory(self, input_directory: str) -> Dict[str, Any]:
-        reader = DirectoryReader(input_dir=input_directory, recursive=True, max_workers=4)
-        documents = reader.load_data()
-        return await self._process_documents(documents)
-
-    async def _process_file(self, file_path: str) -> Dict[str, Any]:
-        reader = DirectoryReader(input_files=[file_path], max_workers=1)
-        documents = reader.load_data()
-        return await self._process_documents(documents)
-
-    async def _process_urls(self, urls: List[str]) -> Dict[str, Any]:
-        documents = []
-        for url in urls:
-            parsed_content = self.preprocessor.parse_url(url)
-            for content in parsed_content:
-                processed_text = self.preprocessor.preprocess_text(content)
-                documents.append({"text": processed_text, "metadata": {"source": url}})
-        return await self._process_documents(documents)
-
     async def _process_file(self, file_path: str) -> Dict[str, Any]:
         # Create a temporary directory to hold the single file
         temp_dir = os.path.dirname(file_path)
