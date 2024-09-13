@@ -100,11 +100,11 @@ class UnstructuredDataProcessor:
             raise ValueError("Input must be a file path, directory path, or list of URLs")
 
     async def _process_file(self, file_path: str) -> Dict[str, Any]:
-        # Create a temporary directory to hold the single file
-        temp_dir = os.path.dirname(file_path)
+        # Get the directory containing the file
+        file_dir = os.path.dirname(file_path)
         
         # Initialize DirectoryReader with the directory containing the file
-        reader = DirectoryReader(input_dir=temp_dir, recursive=False, max_workers=1)
+        reader = DirectoryReader(file_dir, recursive=False, max_workers=1)
         
         # Filter to only process the specific file
         reader.input_files = [file_path]
