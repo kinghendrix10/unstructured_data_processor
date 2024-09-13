@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 import chardet
+import PyPDF2
 
 class Preprocessor:
     def __init__(self):
