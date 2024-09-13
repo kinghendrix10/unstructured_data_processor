@@ -1,6 +1,6 @@
 # unstructured_data_processor/data_pipeline.py
 import asyncio
-from typing import List, Dict, Any, Callable
+from typing import List, Dict, Any, Callable, Union, Optional
 from llama_index.core import Document
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.embeddings.fastembed import FastEmbedEmbedding
@@ -12,13 +12,21 @@ from .relationship_extractor import RelationshipExtractor
 from .output_formatter import OutputFormatter
 from .llm_factory import LLMFactory
 from .directory_reader import DirectoryReader
+from .utils import setup_logging, progress_callback, run_with_retry, chunk_list
 import logging
 import json
-from collections import defaultdict
+from pathlib import Path
 
 class UnstructuredDataProcessor:
-    def __init__(self, llm, embedding_model="BAAI/bge-small-en-v1.5", chunk_size=1024, chunk_overlap=100, 
-                 rate_limit: int = 60, time_period: int = 60, max_tokens: int = None, verbose: bool = False):
+    def __init__(self, 
+                 llm: Any, 
+                 embedding_model: str = "BAAI/bge-small-en-v1.5", 
+                 chunk_size: int = 1024, 
+                 chunk_overlap: int = 100, 
+                 rate_limit: int = 60, 
+                 time_period: int = 60, 
+                 max_tokens: Optional[int] = None, 
+                 verbose: bool = False):
         self.llm = llm
         Settings.embed_model = FastEmbedEmbedding(model_name=embedding_model)
         Settings.chunk_size = chunk_size
@@ -32,6 +40,11 @@ class UnstructuredDataProcessor:
         self.batch_size = 10
         self.max_retries = 3
         self.verbose = verbose
+        self._setup_logging()
+
+    def _setup_logging(self):
+        log_level = logging.DEBUG if self.verbose else logging.INFO
+        setup_logging(log_level)
 
     def set_custom_prompt(self, custom_prompt: str):
         self.entity_extractor.set_custom_prompt(custom_prompt)
@@ -55,12 +68,6 @@ class UnstructuredDataProcessor:
     def set_output_format(self, format: str):
         self.output_formatter.set_output_format(format)
 
-    def set_logging_config(self, log_level: int, log_format: str):
-        if self.verbose:
-            logging.basicConfig(level=logging.DEBUG, format=log_format)
-        else:
-            logging.basicConfig(level=log_level, format=log_format)
-
     def set_llm_model(self, model_name: str, **kwargs):
         self.llm = LLMFactory.get_model(model_name, **kwargs)
         self.entity_extractor.set_llm(self.llm)
@@ -72,7 +79,7 @@ class UnstructuredDataProcessor:
     def set_max_retries(self, retries: int):
         self.max_retries = retries
 
-    def enable_progress_tracking(self, callback: Callable[[int, int], None]):
+    def enable_progress_tracking(self, callback: Callable[[int, int], None] = progress_callback):
         self.progress_callback = callback
 
     def add_pipeline_step(self, step: Callable[[Any], Any], position: int = -1):
@@ -81,56 +88,79 @@ class UnstructuredDataProcessor:
         else:
             self.pipeline_steps.insert(position, step)
 
-    async def process_documents(self, input_directory: str) -> Dict[str, Any]:
+    async def process_data(self, input_data: Union[str, List[str]]) -> Dict[str, Any]:
+        if isinstance(input_data, str):
+            if Path(input_data).is_dir():
+                return await self._process_directory(input_data)
+            else:
+                return await self._process_file(input_data)
+        elif isinstance(input_data, list):
+            return await self._process_urls(input_data)
+        else:
+            raise ValueError("Input must be a file path, directory path, or list of URLs")
+
+    async def _process_directory(self, input_directory: str) -> Dict[str, Any]:
         reader = DirectoryReader(input_dir=input_directory, recursive=True, max_workers=4)
         documents = reader.load_data()
+        return await self._process_documents(documents)
+
+    async def _process_file(self, file_path: str) -> Dict[str, Any]:
+        reader = DirectoryReader(input_files=[file_path], max_workers=1)
+        documents = reader.load_data()
+        return await self._process_documents(documents)
+
+    async def _process_urls(self, urls: List[str]) -> Dict[str, Any]:
+        documents = []
+        for url in urls:
+            parsed_content = self.preprocessor.parse_url(url)
+            for content in parsed_content:
+                processed_text = self.preprocessor.preprocess_text(content)
+                documents.append({"text": processed_text, "metadata": {"source": url}})
+        return await self._process_documents(documents)
+
+    async def _process_documents(self, documents: List[Dict[str, Any]]) -> Dict[str, Any]:
         processed_docs = []
         for document in documents:
-            for content in document["text"]:
-                processed_text = self.preprocessor.preprocess_text(content)
-                processed_docs.append(Document(text=processed_text, metadata=document["metadata"]))
+            processed_text = self.preprocessor.preprocess_text(document["text"])
+            processed_docs.append(Document(text=processed_text, metadata=document["metadata"]))
 
         splitter = SentenceSplitter(chunk_size=Settings.chunk_size, chunk_overlap=Settings.chunk_overlap)
         nodes = splitter.get_nodes_from_documents(processed_docs)
 
         all_data = {"entities": [], "relationships": []}
         entity_id_map = {}
-        for i in range(0, len(nodes), self.batch_size):
-            batch = nodes[i:i+self.batch_size]
-            batch_data = await self._process_batch(batch, entity_id_map)
+        
+        for i, batch in enumerate(chunk_list(nodes, self.batch_size)):
+            batch_data = await run_with_retry(self._process_batch, self.max_retries, 1.0, batch, entity_id_map)
             all_data["entities"].extend(batch_data["entities"])
             all_data["relationships"].extend(batch_data["relationships"])
+            
             if hasattr(self, 'progress_callback'):
-                self.progress_callback(i + len(batch), len(nodes))
+                self.progress_callback((i + 1) * self.batch_size, len(nodes))
 
         final_data = self._finalize_data(all_data)
         return self.output_formatter.format_output(final_data)
 
-    async def _process_batch(self, nodes: List[Dict[str, Any]], entity_id_map: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    async def _process_batch(self, nodes: List[Document], entity_id_map: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
         batch_data = {"entities": [], "relationships": []}
         for node in nodes:
-            for _ in range(self.max_retries):
-                try:
-                    entities = await self.entity_extractor.extract_entities(node.text)
-                    relationships = await self.relationship_extractor.extract_relationships(node.text, entities)
-                    
-                    # Ensure unique entity IDs and merge metadata for duplicates
-                    for entity in entities:
-                        if entity['id'] in entity_id_map:
-                            existing_entity = entity_id_map[entity['id']]
-                            existing_entity['metadata'].update(entity['metadata'])
-                        else:
-                            entity_id_map[entity['id']] = entity
-                            batch_data["entities"].append(entity)
-                    
-                    batch_data["relationships"].extend(relationships)
-                    break
-                except Exception as e:
-                    if self.verbose:
-                        logging.error(f"Error processing node: {e}")
-                    if _ == self.max_retries - 1:
-                        if self.verbose:
-                            logging.error(f"Max retries reached for node. Skipping.")
+            try:
+                entities = await self.entity_extractor.extract_entities(node.text)
+                relationships = await self.relationship_extractor.extract_relationships(node.text, entities)
+                
+                # Ensure unique entity IDs and merge metadata for duplicates
+                for entity in entities:
+                    if entity['id'] in entity_id_map:
+                        existing_entity = entity_id_map[entity['id']]
+                        existing_entity['metadata'].update(entity['metadata'])
+                    else:
+                        entity_id_map[entity['id']] = entity
+                        batch_data["entities"].append(entity)
+                
+                batch_data["relationships"].extend(relationships)
+            except Exception as e:
+                logging.error(f"Error processing node: {str(e)}")
+        
         return batch_data
 
     def _finalize_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -138,49 +168,16 @@ class UnstructuredDataProcessor:
             data = step(data)
         return data
 
-    async def process_urls(self, website_urls: List[str]) -> Dict[str, Any]:
-        processed_docs = []
-        for url in website_urls:
-            parsed_content = self.preprocessor.parse_url(url)
-            for content in parsed_content:
-                processed_text = self.preprocessor.preprocess_text(content)
-                processed_docs.append(Document(text=processed_text, metadata={"source": url}))
-
-        splitter = SentenceSplitter(chunk_size=Settings.chunk_size, chunk_overlap=Settings.chunk_overlap)
-        nodes = splitter.get_nodes_from_documents(processed_docs)
-
+    async def restructure_documents(self, input_directory: Optional[str] = None, website_urls: Optional[List[str]] = None) -> Dict[str, Any]:
         all_data = {"entities": [], "relationships": []}
-        entity_id_map = {}
-        for i in range(0, len(nodes), self.batch_size):
-            batch = nodes[i:i+self.batch_size]
-            batch_data = await self._process_batch(batch, entity_id_map)
-            all_data["entities"].extend(batch_data["entities"])
-            all_data["relationships"].extend(batch_data["relationships"])
-            if hasattr(self, 'progress_callback'):
-                self.progress_callback(i + len(batch), len(nodes))
-
-        final_data = self._finalize_data(all_data)
-        return self.output_formatter.format_output(final_data)
-
-    async def restructure_documents(self, input_directory: str = None, website_urls: List[str] = None) -> Dict[str, Any]:
-        all_data = {"entities": [], "relationships": []}
+        
         if input_directory:
-            data = await self.process_documents(input_directory)
-            if isinstance(data, str):
-                try:
-                    data = json.loads(data)
-                except json.JSONDecodeError:
-                    data = {"entities": [], "relationships": []}
+            data = await self.process_data(input_directory)
             all_data["entities"].extend(data["entities"])
             all_data["relationships"].extend(data["relationships"])
 
         if website_urls:
-            data = await self.process_urls(website_urls)
-            if isinstance(data, str):
-                try:
-                    data = json.loads(data)
-                except json.JSONDecodeError:
-                    data = {"entities": [], "relationships": []}
+            data = await self.process_data(website_urls)
             all_data["entities"].extend(data["entities"])
             all_data["relationships"].extend(data["relationships"])
 
