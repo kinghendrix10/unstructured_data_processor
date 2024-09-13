@@ -102,14 +102,12 @@ class UnstructuredDataProcessor:
     async def _process_file(self, file_path: str) -> Dict[str, Any]:
         # Get the directory containing the file
         file_dir = os.path.dirname(file_path)
+        reader = DirectoryReader(input_dir=file_dir, recursive=False, max_workers=1)
+        all_documents = reader.load_data()
+        documents = [doc for doc in all_documents if doc['metadata']['file_path'] == file_path]
+        if not documents:
+            raise ValueError(f"File not found or couldn't be processed: {file_path}")
         
-        # Initialize DirectoryReader with the directory containing the file
-        reader = DirectoryReader(file_dir, recursive=False, max_workers=1)
-        
-        # Filter to only process the specific file
-        reader.input_files = [file_path]
-        
-        documents = reader.load_data()
         return await self._process_documents(documents)
 
     async def process_data(self, input_data: Union[str, List[str]], output_dir: str = None, max_pages: int = 10) -> Dict[str, Any]:
