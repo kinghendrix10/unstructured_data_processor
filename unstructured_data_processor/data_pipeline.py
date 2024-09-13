@@ -111,6 +111,15 @@ class UnstructuredDataProcessor:
         return await self._process_documents(documents)
 
     async def process_data(self, input_data: Union[str, List[str]], output_dir: str = None, max_pages: int = 10) -> Dict[str, Any]:
+    if isinstance(input_data, str):
+        if input_data.startswith('http://') or input_data.startswith('https://'):
+            preprocessed_data = await self.preprocessor.process_website(input_data, output_dir, max_pages)
+        else:
+            preprocessed_data = await self.preprocessor.process_input(input_data, output_dir, max_pages)
+    elif isinstance(input_data, list):
+        preprocessed_data = await self.preprocessor.process_urls(input_data)
+    else:
+        raise ValueError("Input must be a file path, directory path, URL, or list of URLs")
         preprocessed_data = await self.preprocessor.process_input(input_data, output_dir, max_pages)
         documents = [Document(text=item['text'], metadata=item['metadata']) for item in preprocessed_data]
         
