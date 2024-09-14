@@ -1,7 +1,10 @@
 # unstructured_data_processor/data_pipeline.py
 import asyncio
 import os
+import logging
+import json
 from typing import List, Dict, Any, Callable, Union, Optional
+from pathlib import Path
 from llama_index.core import Document
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.embeddings.fastembed import FastEmbedEmbedding
@@ -14,34 +17,33 @@ from .output_formatter import OutputFormatter
 from .llm_factory import LLMFactory
 from .directory_reader import DirectoryReader
 from .utils import setup_logging, progress_callback, run_with_retry, chunk_list
-import logging
-import json
-from pathlib import Path
+from .baml_integration import BAMLEntityExtractor, BAMLRelationshipExtractor
+from .config import Config
 
 class UnstructuredDataProcessor:
-    def __init__(self, 
-                 llm: Any, 
-                 embedding_model: str = "BAAI/bge-small-en-v1.5", 
-                 chunk_size: int = 1024, 
-                 chunk_overlap: int = 100, 
-                 rate_limit: int = 60, 
-                 time_period: int = 60, 
-                 max_tokens: Optional[int] = None, 
-                 verbose: bool = False):
-        self.llm = llm
-        Settings.embed_model = FastEmbedEmbedding(model_name=embedding_model)
-        Settings.chunk_size = chunk_size
-        Settings.chunk_overlap = chunk_overlap
-        self.rate_limiter = RateLimiter(rate_limit, time_period, max_tokens)
+    def __init__(self, config: Config):
+        self.config = config
+        self.llm = LLMFactory.get_model(config.model)
+        self.rate_limiter = RateLimiter(config.rate_limit, config.time_period)
         self.preprocessor = Preprocessor()
-        self.entity_extractor = EntityExtractor(self.llm, self.rate_limiter)
-        self.relationship_extractor = RelationshipExtractor(self.llm, self.rate_limiter)
+        
+        if config.use_baml:
+            self.entity_extractor = BAMLEntityExtractor()
+            self.relationship_extractor = BAMLRelationshipExtractor()
+        else:
+            self.entity_extractor = EntityExtractor(self.llm, self.rate_limiter)
+            self.relationship_extractor = RelationshipExtractor(self.llm, self.rate_limiter)
+        
         self.output_formatter = OutputFormatter()
         self.pipeline_steps = []
         self.batch_size = 10
         self.max_retries = 3
-        self.verbose = verbose
+        self.verbose = config.verbose
         self._setup_logging()
+
+    def _setup_logging(self):
+        log_level = logging.DEBUG if self.verbose else logging.INFO
+        setup_logging(log_level)
 
     def _setup_logging(self):
         log_level = logging.DEBUG if self.verbose else logging.INFO
