@@ -5,6 +5,8 @@ from typing import List, Dict, Any, Generator, Optional
 import chardet
 import PyPDF2
 from pathlib import Path
+import pandas as pd
+import docx
 
 class DirectoryReader:
     def __init__(
@@ -31,8 +33,13 @@ class DirectoryReader:
 
     def _load_file(self, file_path: str) -> Dict[str, Any]:
         try:
-            if file_path.lower().endswith('.pdf'):
+            file_extension = Path(file_path).suffix.lower()
+            if file_extension == '.pdf':
                 return self._load_pdf(file_path)
+            elif file_extension == '.xlsx':
+                return self._load_excel(file_path)
+            elif file_extension == '.docx':
+                return self._load_docx(file_path)
             else:
                 return self._load_text_file(file_path)
         except Exception as e:
@@ -49,6 +56,26 @@ class DirectoryReader:
             return {"text": content, "metadata": metadata}
         except Exception as e:
             print(f"Error loading PDF file {file_path}: {e}")
+            return {"text": "", "metadata": {}}
+
+    def _load_excel(self, file_path: str) -> Dict[str, Any]:
+        try:
+            df = pd.read_excel(file_path)
+            content = df.to_string(index=False)
+            metadata = self._extract_metadata(file_path)
+            return {"text": content, "metadata": metadata}
+        except Exception as e:
+            print(f"Error loading Excel file {file_path}: {e}")
+            return {"text": "", "metadata": {}}
+
+    def _load_docx(self, file_path: str) -> Dict[str, Any]:
+        try:
+            doc = docx.Document(file_path)
+            content = '\n'.join([para.text for para in doc.paragraphs])
+            metadata = self._extract_metadata(file_path)
+            return {"text": content, "metadata": metadata}
+        except Exception as e:
+            print(f"Error loading Word file {file_path}: {e}")
             return {"text": "", "metadata": {}}
 
     def _load_text_file(self, file_path: str) -> Dict[str, Any]:

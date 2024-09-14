@@ -1,12 +1,12 @@
 # unstructured_data_processor/preprocessor.py
 import re
-from typing import List, Callable, Dict, Any
-import pandas as pd
-import docx
+from typing import List, Callable, Dict, Any, Set
 from bs4 import BeautifulSoup
-import requests
-import chardet
+import aiohttp
+import asyncio
+import os
 from pathlib import Path
+from urllib.parse import urljoin, urlparse
 
 class Preprocessor:
     def __init__(self):
@@ -15,7 +15,6 @@ class Preprocessor:
             self.filter_content,
             self.summarize_text
         ]
-        self.document_parser = None
 
     @staticmethod
     def clean_text(text: str) -> str:
@@ -38,65 +37,70 @@ class Preprocessor:
     def add_preprocessing_step(self, step_function: Callable[[str], str]):
         self.preprocessing_steps.append(step_function)
 
-    def set_document_parser(self, parser: Callable[[str], List[str]]):
-        self.document_parser = parser
-
     def preprocess_text(self, text: str) -> str:
         for step in self.preprocessing_steps:
             text = step(text)
         return text
 
-    def parse_document(self, document: str) -> List[str]:
-        if self.document_parser:
-            return self.document_parser(document)
-        return [document]  # Default behavior: treat entire document as one chunk
+    async def process_website(self, url: str, output_dir: str, max_pages: int = 10) -> List[Dict[str, Any]]:
+        saved_files = await self.crawl_website(url, output_dir, max_pages)
+        documents = []
+        for file in saved_files:
+            with open(file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            processed_text = self.preprocess_text(content)
+            documents.append({"text": processed_text, "metadata": {"source": file}})
+        return documents
 
-    def parse_file(self, file_path: str) -> List[str]:
-        file_extension = Path(file_path).suffix.lower()
-        if file_extension == '.xlsx':
-            return self._parse_excel(file_path)
-        elif file_extension == '.docx':
-            return self._parse_docx(file_path)
-        elif file_extension == '.txt':
-            return self._parse_txt(file_path)
-        else:
-            raise ValueError(f"Unsupported document format: {file_extension}")
+    async def process_urls(self, urls: List[str]) -> List[Dict[str, Any]]:
+        documents = []
+        for url in urls:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    content = await response.text()
+            soup = BeautifulSoup(content, 'html.parser')
+            text = soup.get_text()
+            processed_text = self.preprocess_text(text)
+            documents.append({"text": processed_text, "metadata": {"source": url}})
+        return documents
 
-    def parse_url(self, url: str) -> List[str]:
-        url_pattern = re.compile(
-            r'^(https?|ftp)://'
-            r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|'
-            r'localhost|'
-            r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|'
-            r'\[?[A-F0-9]*:[A-F0-9:]+\]?)'
-            r'(?::\d+)?'
-            r'(?:/?|[/?]\S+)$', re.IGNORECASE)
-        if re.match(url_pattern, url):
-            return self._parse_url(url)
-        else:
-            raise ValueError(f"Invalid url: {url}")
+    async def crawl_website(self, start_url: str, output_dir: str, max_pages: int = 10) -> List[str]:
+        visited: Set[str] = set()
+        to_visit: List[str] = [start_url]
+        saved_files: List[str] = []
 
-    def _parse_excel(self, file_path: str) -> List[str]:
-        df = pd.read_excel(file_path)
-        return df.to_string(index=False).split('\n')
+        async with aiohttp.ClientSession() as session:
+            while to_visit and len(saved_files) < max_pages:
+                url = to_visit.pop(0)
+                if url not in visited:
+                    visited.add(url)
+                    try:
+                        filepath = await self.save_webpage(url, output_dir, session)
+                        saved_files.append(filepath)
 
-    def _parse_docx(self, file_path: str) -> List[str]:
-        doc = docx.Document(file_path)
-        return [para.text for para in doc.paragraphs]
+                        async with session.get(url) as response:
+                            content = await response.text()
+                        soup = BeautifulSoup(content, 'html.parser')
+                        for link in soup.find_all('a', href=True):
+                            full_url = urljoin(url, link['href'])
+                            if urlparse(full_url).netloc == urlparse(start_url).netloc:
+                                to_visit.append(full_url)
+                    except Exception as e:
+                        print(f"Error processing {url}: {str(e)}")
 
-    def _parse_txt(self, file_path: str) -> List[str]:
-        try:
-            with open(file_path, 'rb') as file:
-                raw_data = file.read()
-                encoding = chardet.detect(raw_data)['encoding'] or 'utf-8'
-            
-            with open(file_path, 'r', encoding=encoding) as file:
-                return file.readlines()
-        except Exception as e:
-            print(f"Error parsing text file {file_path}: {e}")
-            return []
+        return saved_files
 
-    def _parse_url(self, url: str) -> List[str]:
-        response = requests.get(url)
-        soup = BeautifulSoup(response.content, 'html.parser')
-        return [soup.get_text()]
+    async def save_webpage(self, url: str, output_dir: str, session: aiohttp.ClientSession) -> str:
+        async with session.get(url) as response:
+            content = await response.text()
+
+        soup = BeautifulSoup(content, 'html.parser')
+        title = soup.title.string if soup.title else url.split('/')[-1]
+        filename = "".join(c if c.isalnum() else "_" for c in title) + ".html"
+        filepath = os.path.join(output_dir, filename)
+
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(str(soup))
+        
+        print(f"Saved: {filepath}")
+        return filepath

@@ -1,5 +1,6 @@
 # unstructured_data_processor/data_pipeline.py
 import asyncio
+import os
 from typing import List, Dict, Any, Callable, Union, Optional
 from llama_index.core import Document
 from llama_index.core.node_parser import SentenceSplitter
@@ -88,58 +89,51 @@ class UnstructuredDataProcessor:
         else:
             self.pipeline_steps.insert(position, step)
 
-    async def process_data(self, input_data: Union[str, List[str]]) -> Dict[str, Any]:
-        if isinstance(input_data, str):
-            if Path(input_data).is_dir():
-                return await self._process_directory(input_data)
+    async def process_data(self, input_data: Union[str, List[str]], output_dir: str = None, max_pages: int = 10) -> Dict[str, Any]:
+        try:
+            if isinstance(input_data, str):
+                if Path(input_data).is_dir():
+                    directory_reader = DirectoryReader(input_dir=input_data, recursive=True, max_workers=4)
+                    preprocessed_data = directory_reader.load_data()
+                elif input_data.startswith('http://') or input_data.startswith('https://'):
+                    preprocessed_data = await self.preprocessor.process_website(input_data, output_dir, max_pages)
+                else:
+                    directory_reader = DirectoryReader(input_dir=os.path.dirname(input_data), recursive=False, max_workers=1)
+                    preprocessed_data = [doc for doc in directory_reader.load_data() if doc['metadata']['file_path'] == input_data]
+            elif isinstance(input_data, list):
+                if all(url.startswith('http://') or url.startswith('https://') for url in input_data):
+                    preprocessed_data = await self.preprocessor.process_urls(input_data)
+                else:
+                    directory_reader = DirectoryReader(input_dir=os.path.dirname(input_data[0]), recursive=True, max_workers=4)
+                    preprocessed_data = [doc for doc in directory_reader.load_data() if doc['metadata']['file_path'] in input_data]
             else:
-                return await self._process_file(input_data)
-        elif isinstance(input_data, list):
-            return await self._process_urls(input_data)
-        else:
-            raise ValueError("Input must be a file path, directory path, or list of URLs")
+                raise ValueError("Input must be a file path, directory path, URL, or list of URLs")
 
-    async def _process_directory(self, input_directory: str) -> Dict[str, Any]:
-        reader = DirectoryReader(input_dir=input_directory, recursive=True, max_workers=4)
-        documents = reader.load_data()
-        return await self._process_documents(documents)
+            if not preprocessed_data:
+                raise ValueError("No data preprocessed")
 
-    async def _process_file(self, file_path: str) -> Dict[str, Any]:
-        reader = DirectoryReader(input_files=[file_path], max_workers=1)
-        documents = reader.load_data()
-        return await self._process_documents(documents)
-
-    async def _process_urls(self, urls: List[str]) -> Dict[str, Any]:
-        documents = []
-        for url in urls:
-            parsed_content = self.preprocessor.parse_url(url)
-            for content in parsed_content:
-                processed_text = self.preprocessor.preprocess_text(content)
-                documents.append({"text": processed_text, "metadata": {"source": url}})
-        return await self._process_documents(documents)
-
-    async def _process_documents(self, documents: List[Dict[str, Any]]) -> Dict[str, Any]:
-        processed_docs = []
-        for document in documents:
-            processed_text = self.preprocessor.preprocess_text(document["text"])
-            processed_docs.append(Document(text=processed_text, metadata=document["metadata"]))
-
-        splitter = SentenceSplitter(chunk_size=Settings.chunk_size, chunk_overlap=Settings.chunk_overlap)
-        nodes = splitter.get_nodes_from_documents(processed_docs)
-
-        all_data = {"entities": [], "relationships": []}
-        entity_id_map = {}
-        
-        for i, batch in enumerate(chunk_list(nodes, self.batch_size)):
-            batch_data = await run_with_retry(self._process_batch, self.max_retries, 1.0, batch, entity_id_map)
-            all_data["entities"].extend(batch_data["entities"])
-            all_data["relationships"].extend(batch_data["relationships"])
+            documents = [Document(text=self.preprocessor.preprocess_text(item['text']), metadata=item['metadata']) for item in preprocessed_data]
             
-            if hasattr(self, 'progress_callback'):
-                self.progress_callback((i + 1) * self.batch_size, len(nodes))
+            splitter = SentenceSplitter(chunk_size=Settings.chunk_size, chunk_overlap=Settings.chunk_overlap)
+            nodes = splitter.get_nodes_from_documents(documents)
 
-        final_data = self._finalize_data(all_data)
-        return self.output_formatter.format_output(final_data)
+            all_data = {"entities": [], "relationships": []}
+            entity_id_map = {}
+            
+            for i, batch in enumerate(chunk_list(nodes, self.batch_size)):
+                batch_data = await run_with_retry(self._process_batch, self.max_retries, 1.0, batch, entity_id_map)
+                all_data["entities"].extend(batch_data["entities"])
+                all_data["relationships"].extend(batch_data["relationships"])
+                
+                if hasattr(self, 'progress_callback'):
+                    self.progress_callback((i + 1) * self.batch_size, len(nodes))
+
+            final_data = self._finalize_data(all_data)
+            return self.output_formatter.format_output(final_data)
+
+        except Exception as e:
+            logging.error(f"Error in process_data: {str(e)}")
+            return {"entities": [], "relationships": []}
 
     async def _process_batch(self, nodes: List[Document], entity_id_map: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
         batch_data = {"entities": [], "relationships": []}
@@ -156,6 +150,14 @@ class UnstructuredDataProcessor:
                     else:
                         entity_id_map[entity['id']] = entity
                         batch_data["entities"].append(entity)
+                
+                # Add error handling for relationship parsing
+                if isinstance(relationships, str):
+                    try:
+                        relationships = json.loads(relationships)
+                    except json.JSONDecodeError:
+                        logging.error(f"Invalid JSON in relationship extraction: {relationships}")
+                        relationships = []
                 
                 batch_data["relationships"].extend(relationships)
             except Exception as e:
