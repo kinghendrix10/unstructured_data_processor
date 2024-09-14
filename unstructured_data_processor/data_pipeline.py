@@ -89,14 +89,14 @@ class UnstructuredDataProcessor:
         else:
             self.pipeline_steps.insert(position, step)
 
-    async def process_data(self, input_data: Union[str, List[str]], output_dir: str = None, max_pages: int = 10) -> Dict[str, Any]:
+    async def process_data(self, input_data: Union[str, List[str]], max_pages: int = 10) -> Dict[str, Any]:
         try:
             if isinstance(input_data, str):
                 if Path(input_data).is_dir():
                     directory_reader = DirectoryReader(input_dir=input_data, recursive=True, max_workers=4)
                     preprocessed_data = directory_reader.load_data()
                 elif input_data.startswith('http://') or input_data.startswith('https://'):
-                    preprocessed_data = await self.preprocessor.process_website(input_data, output_dir, max_pages)
+                    preprocessed_data = await self.preprocessor.process_website(input_data, max_pages)
                 else:
                     directory_reader = DirectoryReader(input_dir=os.path.dirname(input_data), recursive=False, max_workers=1)
                     preprocessed_data = [doc for doc in directory_reader.load_data() if doc['metadata']['file_path'] == input_data]
@@ -108,9 +108,10 @@ class UnstructuredDataProcessor:
                     preprocessed_data = [doc for doc in directory_reader.load_data() if doc['metadata']['file_path'] in input_data]
             else:
                 raise ValueError("Input must be a file path, directory path, URL, or list of URLs")
-
+    
             if not preprocessed_data:
-                raise ValueError("No data preprocessed")
+                logging.warning(f"No data preprocessed for input: {input_data}")
+                return {"entities": [], "relationships": []}
 
             documents = [Document(text=self.preprocessor.preprocess_text(item['text']), metadata=item['metadata']) for item in preprocessed_data]
             

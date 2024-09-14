@@ -42,65 +42,58 @@ class Preprocessor:
             text = step(text)
         return text
 
-    async def process_website(self, url: str, output_dir: str, max_pages: int = 10) -> List[Dict[str, Any]]:
-        saved_files = await self.crawl_website(url, output_dir, max_pages)
-        documents = []
-        for file in saved_files:
-            with open(file, 'r', encoding='utf-8') as f:
-                content = f.read()
-            processed_text = self.preprocess_text(content)
-            documents.append({"text": processed_text, "metadata": {"source": file}})
-        return documents
+    async def process_website(self, url: str, max_pages: int = 10) -> List[Dict[str, Any]]:
+        try:
+            documents = await self.crawl_website(url, max_pages)
+            return documents
+        except Exception as e:
+            logging.error(f"Error processing website {url}: {str(e)}")
+            return []  # Return an empty list instead of None
 
-    async def process_urls(self, urls: List[str]) -> List[Dict[str, Any]]:
-        documents = []
-        for url in urls:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as response:
-                    content = await response.text()
-            soup = BeautifulSoup(content, 'html.parser')
-            text = soup.get_text()
-            processed_text = self.preprocess_text(text)
-            documents.append({"text": processed_text, "metadata": {"source": url}})
-        return documents
-
-    async def crawl_website(self, start_url: str, output_dir: str, max_pages: int = 10) -> List[str]:
+    async def crawl_website(self, start_url: str, max_pages: int = 10) -> List[Dict[str, Any]]:
         visited: Set[str] = set()
         to_visit: List[str] = [start_url]
-        saved_files: List[str] = []
+        documents: List[Dict[str, Any]] = []
 
         async with aiohttp.ClientSession() as session:
-            while to_visit and len(saved_files) < max_pages:
+            while to_visit and len(documents) < max_pages:
                 url = to_visit.pop(0)
                 if url not in visited:
                     visited.add(url)
                     try:
-                        filepath = await self.save_webpage(url, output_dir, session)
-                        saved_files.append(filepath)
+                        async with session.get(url, timeout=10) as response:  # Add timeout
+                            if response.status == 200:
+                                content = await response.text()
+                                soup = BeautifulSoup(content, 'html.parser')
+                                text = soup.get_text()
+                                processed_text = self.preprocess_text(text)
+                                documents.append({"text": processed_text, "metadata": {"source": url}})
 
-                        async with session.get(url) as response:
-                            content = await response.text()
-                        soup = BeautifulSoup(content, 'html.parser')
-                        for link in soup.find_all('a', href=True):
-                            full_url = urljoin(url, link['href'])
-                            if urlparse(full_url).netloc == urlparse(start_url).netloc:
-                                to_visit.append(full_url)
+                                for link in soup.find_all('a', href=True):
+                                    full_url = urljoin(url, link['href'])
+                                    if urlparse(full_url).netloc == urlparse(start_url).netloc:
+                                        to_visit.append(full_url)
+                            else:
+                                logging.warning(f"Failed to fetch {url}: HTTP {response.status}")
                     except Exception as e:
-                        print(f"Error processing {url}: {str(e)}")
+                        logging.error(f"Error processing {url}: {str(e)}")
 
-        return saved_files
+        return documents
 
-    async def save_webpage(self, url: str, output_dir: str, session: aiohttp.ClientSession) -> str:
-        async with session.get(url) as response:
-            content = await response.text()
-
-        soup = BeautifulSoup(content, 'html.parser')
-        title = soup.title.string if soup.title else url.split('/')[-1]
-        filename = "".join(c if c.isalnum() else "_" for c in title) + ".html"
-        filepath = os.path.join(output_dir, filename)
-
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(str(soup))
-        
-        print(f"Saved: {filepath}")
-        return filepath
+    async def process_urls(self, urls: List[str]) -> List[Dict[str, Any]]:
+        documents = []
+        async with aiohttp.ClientSession() as session:
+            for url in urls:
+                try:
+                    async with session.get(url, timeout=10) as response:
+                        if response.status == 200:
+                            content = await response.text()
+                            soup = BeautifulSoup(content, 'html.parser')
+                            text = soup.get_text()
+                            processed_text = self.preprocess_text(text)
+                            documents.append({"text": processed_text, "metadata": {"source": url}})
+                        else:
+                            logging.warning(f"Failed to fetch {url}: HTTP {response.status}")
+                except Exception as e:
+                    logging.error(f"Error processing URL {url}: {str(e)}")
+        return documents
