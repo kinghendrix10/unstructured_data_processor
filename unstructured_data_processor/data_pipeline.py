@@ -21,13 +21,13 @@ from .baml_integration import BAMLEntityExtractor, BAMLRelationshipExtractor
 from .config import Config
 
 class UnstructuredDataProcessor:
-    def __init__(self, config: Config):
-        self.config = config
-        self.llm = LLMFactory.get_model(config.model)
-        self.rate_limiter = RateLimiter(config.rate_limit, config.time_period)
+    def __init__(self, llm: Any, use_baml: bool = False, **kwargs):
+        self.llm = llm
+        self.use_baml = use_baml
+        self.rate_limiter = RateLimiter(kwargs.get('rate_limit', 60), kwargs.get('time_period', 60))
         self.preprocessor = Preprocessor()
         
-        if config.use_baml:
+        if self.use_baml:
             self.entity_extractor = BAMLEntityExtractor()
             self.relationship_extractor = BAMLRelationshipExtractor()
         else:
@@ -35,10 +35,7 @@ class UnstructuredDataProcessor:
             self.relationship_extractor = RelationshipExtractor(self.llm, self.rate_limiter)
         
         self.output_formatter = OutputFormatter()
-        self.pipeline_steps = []
-        self.batch_size = 10
-        self.max_retries = 3
-        self.verbose = config.verbose
+        self.verbose = kwargs.get('verbose', False)
         self._setup_logging()
 
     def _setup_logging(self):
