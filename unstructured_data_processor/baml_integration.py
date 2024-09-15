@@ -1,4 +1,6 @@
 # baml_integration.py
+!baml-cli init
+!baml-cli generate
 import baml
 
 class BAMLEntityExtractor:
