@@ -36,6 +36,7 @@ class UnstructuredDataProcessor:
         
         self.output_formatter = OutputFormatter()
         self.verbose = kwargs.get('verbose', False)
+        self.batch_size = kwargs.get('batch_size', 10)  # Ensure batch_size is initialized
         self._setup_logging()
 
     def _setup_logging(self):
