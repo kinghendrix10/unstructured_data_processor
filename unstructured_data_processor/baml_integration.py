@@ -1,5 +1,5 @@
 # baml_integration.py
-import baml
+import baml_client as b
 
 class BAMLEntityExtractor:
     @baml.function
@@ -9,7 +9,7 @@ class BAMLEntityExtractor:
         Text: {text}
         Output JSON format with fields: id, type, name, metadata.
         """
-        return baml.run(prompt)
+        return b.run(prompt)
 
 class BAMLRelationshipExtractor:
     @baml.function
@@ -21,4 +21,4 @@ class BAMLRelationshipExtractor:
         Entities: {entity_descriptions}
         Output JSON format with fields: source, target, type, metadata.
         """
-        return baml.run(prompt)
+        return b.run(prompt)
