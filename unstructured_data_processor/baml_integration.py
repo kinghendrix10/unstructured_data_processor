@@ -2,7 +2,6 @@
 import baml_client as b
 
 class BAMLEntityExtractor:
-    @b.function
     def extract_entities(self, text: str):
         prompt = f"""
         Extract entities of types: Person, Organization, Location, Event, and Concept from the text.
@@ -12,7 +11,6 @@ class BAMLEntityExtractor:
         return b.run(prompt)
 
 class BAMLRelationshipExtractor:
-    @b.function
     def extract_relationships(self, text: str, entities):
         entity_descriptions = "\n".join([f"{e['id']}: {e['name']} ({e['type']})" for e in entities])
         prompt = f"""
